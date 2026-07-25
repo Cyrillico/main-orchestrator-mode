@@ -2,9 +2,7 @@
 
 Claude Code skill adapter.
 
-Files:
+- `SKILL.md`
+- `workflows/main-orchestrator-mode.js`
 
-- `SKILL.md` — Claude triggers, Workflow entry, fallback control loop
-- `workflows/main-orchestrator-mode.js` — Claude Workflow implementation
-
-Install via repo root `AGENTS.md`. Paths must stay skill-local.
+Install via repo root `INSTALL.md`.

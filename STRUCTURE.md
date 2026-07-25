@@ -8,7 +8,6 @@ Public package layout for Main Orchestrator Mode.
 main-orchestrator-mode/
 ├── README.md
 ├── LICENSE
-├── AGENTS.md
 ├── STRUCTURE.md
 ├── prompts/
 │   └── install-and-use.md
@@ -59,7 +58,7 @@ main-orchestrator-mode/
 - [x] `partition_write_tasks.py` copied + smoke-tested
 - [x] examples added
 - [x] script smoke + personal-path scan clean
-- [x] docs/scripts ready for `AGENTS.md` install flow
+- [x] docs/scripts ready for `INSTALL.md` install flow
 - [ ] live host install dry-run (Claude + Codex skill dirs)
 - [x] GitHub public repo created and pushed
 

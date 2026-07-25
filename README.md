@@ -1,151 +1,54 @@
 # Main Orchestrator Mode (`orch`)
 
-Host-neutral multi-agent orchestration skill for multi-file work.
+Main Orchestrator Mode is a multi-agent orchestration skill for multi-file work. It keeps the parent agent short-context: schedule, lock, and merge only. Workers explore in parallel, write with exclusive per-file ownership, and return summary digests instead of full dumps.
 
-**Core idea:** parent only schedules / locks / merges; workers return short digests; many readers may run in parallel; **at most one writer per file**.
+## Quickstart
 
-This repository packages:
+Install `orch` for your agent: [Ask an agent](#ask-an-agent), [Claude Code](#claude-code), [Codex](#codex).
 
-- a portable orchestration **contract**
-- worker **summary schemas**
-- a small **write-batch partitioner**
-- host adapters for **Claude Code** and **Codex**
+## How it works
 
-> Status: packaging draft for open source. Runtime skill bodies may still be copied in from local installs before v0.1 release.
+When the work spans multiple files, the parent does **not** load whole modules or implement large edits itself. It builds a short task board, runs read-only workers in parallel, then runs write workers in file-locked batches so two agents never own the same path at once.
 
-## Why
+Workers return short structured digests only. The parent accepts or rejects from those digests, not from full transcripts. While workers run, the parent polls about every three minutes, treats real activity as alive, and only reassigns after a silent interval plus one short progress nudge.
 
-Multi-agent coding often fails in three ways:
+There is more detail in `SKILL.md` and `references/`, but that is the core loop: plan → read → locked writes → verify → synthesize.
 
-1. Parent context explodes from full files / full diffs / long logs
-2. Two agents edit the same path
-3. Parent treats wait-timeout as "dead" and spam-continues healthy workers
+## Installation
 
-`orch` enforces a control loop that avoids those failure modes.
+Installation differs by harness. If you use more than one, install `orch` separately for each one.
 
-## Hard rules
+### Ask an agent
 
-1. **Parent / main window**
-   - Schedule, lock, merge, accept only
-   - Do not load whole modules into parent context
-   - Do not implement large edits while workers are active
-   - Prefer digests under `.orch/<run-id>/`
-2. **Workers**
-   - Return summary only (`references/summary-schema.md`)
-   - Never return full source, full diffs, or long logs
-3. **Concurrency**
-   - `read`: parallel OK
-   - `write`: exclusive per file
-   - different files may write in parallel
-4. **Watchdog**
-   - Poll active lanes about every **~3 min** (range 2–5)
-   - Alive = any reasoning / tool / file / log / process progress
-   - Bare wait-timeout alone is **not** dead
-   - One short progress nudge if silent; reassign after nudge + another silent interval
-
-## Control loop
-
-```text
-classify → plan → read wave(s) → write batches (file-locked) → verify → synthesize
-```
-
-Default bounds (raise only if user asks):
-
-- 1 plan
-- ≤2 read waves
-- ≤20 write batches
-- 1 verify wave
-- 1 synthesize
-
-## Directory layout
-
-```text
-main-orchestrator-mode/
-├── README.md
-├── LICENSE
-├── INSTALL.md                     # machine-oriented install steps (fetch target)
-├── AGENTS.md                      # broader AI install / operate contract
-├── prompts/
-│   └── install-and-use.md         # short copy-paste prompts for AI
-├── SKILL.md                       # host-neutral skill entry (canonical contract)
-├── references/
-│   ├── agent-prefix.md
-│   ├── orchestrator-contract.md
-│   └── summary-schema.md
-├── scripts/
-│   └── partition_write_tasks.py
-├── adapters/
-│   ├── claude/
-│   │   ├── SKILL.md
-│   │   └── workflows/
-│   │       └── main-orchestrator-mode.js
-│   └── codex/
-│       └── SKILL.md
-└── examples/
-    ├── sample-board.json
-    └── sample-digest.json
-```
-
-### What goes where
-
-| Path | Role |
-|------|------|
-| `SKILL.md` | Canonical, host-neutral rules |
-| `references/` | Schemas and contracts loaded on demand |
-| `scripts/` | Pure helpers with no host dependency |
-| `adapters/claude/` | Claude Code skill + Workflow script |
-| `adapters/codex/` | Codex skill entry |
-| `INSTALL.md` | Machine-oriented install steps (AI fetch target) |
-| `AGENTS.md` | Broader AI install/operate contract |
-| `prompts/install-and-use.md` | Short copy-paste prompts |
-
-## Install
-
-### Option A — ask an AI to install
-
-参考 [superpowers](https://github.com/obra/superpowers) 的做法：给 AI **一行指令**，让它去拉并执行安装文档，而不是把全部步骤塞进提示词。
-
-贴给 Claude Code / Codex / 其他 agent：
+Tell your coding agent:
 
 ```text
 Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/main/INSTALL.md
 ```
 
-本地已 clone 时：
+### Claude Code
 
-```text
-Fetch and follow instructions from INSTALL.md in this repo.
-```
-
-装完可再问一句：`Confirm orch is installed and tell me the dest path plus how to invoke it.`
-
-细节在 `INSTALL.md`；运行时操作合同在 `AGENTS.md`。
-
-### Option B — Claude Code manual
+From this repository root:
 
 ```bash
-# from this repo root
-mkdir -p ~/.claude/skills/orch
+mkdir -p ~/.claude/skills/orch/workflows ~/.claude/skills/orch/references
 cp adapters/claude/SKILL.md ~/.claude/skills/orch/SKILL.md
-cp -R references ~/.claude/skills/orch/
-mkdir -p ~/.claude/skills/orch/workflows
-cp adapters/claude/workflows/main-orchestrator-mode.js \
-  ~/.claude/skills/orch/workflows/
-# ensure SKILL.md uses relative/local skill path, not a hardcoded /Users/... path
+cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md   ~/.claude/skills/orch/references/
+cp adapters/claude/workflows/main-orchestrator-mode.js   ~/.claude/skills/orch/workflows/
 ```
 
-### Option C — Codex manual
+### Codex
+
+From this repository root:
 
 ```bash
-# Codex skills root is commonly ~/.codex/skills or your configured skills dir
-mkdir -p ~/.codex/skills/orch
+mkdir -p ~/.codex/skills/orch/scripts ~/.codex/skills/orch/references
 cp adapters/codex/SKILL.md ~/.codex/skills/orch/SKILL.md
-cp -R references ~/.codex/skills/orch/
-mkdir -p ~/.codex/skills/orch/scripts
+cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md   ~/.codex/skills/orch/references/
 cp scripts/partition_write_tasks.py ~/.codex/skills/orch/scripts/
 ```
 
-### Verify partition helper
+### Verify
 
 ```bash
 python3 scripts/partition_write_tasks.py <<'JSON'
@@ -157,47 +60,29 @@ python3 scripts/partition_write_tasks.py <<'JSON'
 JSON
 ```
 
-Expected idea: `w1` and `w3` can share a batch; `w2` conflicts with `w1` on `a.ts`.
+`w1` and `w3` can share a batch; `w2` conflicts with `w1` on `a.ts`.
 
-## Usage
+## The Basic Workflow
 
-Trigger phrases:
+1. **Classify** — Skip the skill for trivial single-file edits.
+2. **Plan** — Build a short task board with `read` / `write` / `verify` tasks and exact `write_files` when known.
+3. **Read wave** — Run ready read-only workers in parallel; collect digests only.
+4. **Write batches** — Partition ready writers so no two share a path; run one exclusive batch at a time.
+5. **Verify** — Prefer tests/commands over re-reading whole modules.
+6. **Synthesize** — Accept or reject from digests; report changed files, risks, and next step.
 
-- `/orch <goal>`
-- "use main orchestrator mode"
-- multi-file implementation / refactor that needs parallel explore then locked writes
+Trigger with `/orch <goal>` or by asking for multi-file orchestration under Main Orchestrator Mode.
 
-Parent final report should stay short:
+## What's Inside
 
-1. Accepted? yes/no
-2. Changed files + 3–8 bullets
-3. Residual risks / blockers
-4. Next step if not accepted
-
-Do **not** paste worker transcripts.
-
-## Artifact layout during a run
-
-Prefer project-local:
-
-```text
-.orch/<run-id>/
-  board.md
-  digests/<task-id>.json
-```
-
-Add `.orch/` to `.gitignore` if needed.
-
-## Non-goals
-
-- Not a full agent runtime
-- Not a replacement for Claude Workflow / Codex multi-agent host APIs
-- Not for trivial single-file edits (just edit directly)
+- `SKILL.md` — host-neutral orchestration contract
+- `INSTALL.md` — install steps for agents and humans
+- `references/` — worker prefix, control contract, summary schemas
+- `scripts/partition_write_tasks.py` — exclusive write-batch partitioner
+- `adapters/claude/` — Claude Code skill + Workflow script
+- `adapters/codex/` — Codex skill
+- `examples/` — sample board and digest
 
 ## License
 
-MIT — see `LICENSE`.
-
-## Provenance note
-
-Originally extracted from personal Claude Code / Codex skill installs and generalized for public packaging. Host-specific wiring lives under `adapters/`.
+MIT. See `LICENSE`.

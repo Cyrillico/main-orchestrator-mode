@@ -84,4 +84,18 @@ When the user says `/orch <goal>` or asks for multi-file orchestration:
 - one writer per file
 - poll active workers ~every 3 min; bare wait-timeout is not dead
 
-Full operator contract: `AGENTS.md`.
+Runtime contract after install: the installed `SKILL.md` and `references/`.
+
+## Update / reinstall
+
+1. Detect existing `<skill-root>/orch`.
+2. Backup once to `orch.bak-<timestamp>` if present.
+3. Overwrite from this repo adapter + shared references/scripts.
+4. Re-run verification.
+
+## Do not
+
+- Hardcode personal paths like `/Users/<name>/...`
+- Rewrite the orchestration contract while installing
+- Mix Claude Workflow files into a Codex install, or Codex scripts into a Claude install
+- Install into a project repo unless the user asked for project-local skills

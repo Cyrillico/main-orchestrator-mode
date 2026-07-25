@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- README aligned to clean install-first layout
+- Removed root `AGENTS.md`; install entrypoint is `INSTALL.md` only
+
 ## 0.1.0 — 2026-07-26
 
 Initial public release.
