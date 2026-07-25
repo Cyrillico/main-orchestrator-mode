@@ -63,9 +63,10 @@ Default bounds (raise only if user asks):
 main-orchestrator-mode/
 ├── README.md
 ├── LICENSE
-├── AGENTS.md                      # AI install / operate instructions
+├── INSTALL.md                     # machine-oriented install steps (fetch target)
+├── AGENTS.md                      # broader AI install / operate contract
 ├── prompts/
-│   └── install-and-use.md         # short copy-paste prompt for AI
+│   └── install-and-use.md         # short copy-paste prompts for AI
 ├── SKILL.md                       # host-neutral skill entry (canonical contract)
 ├── references/
 │   ├── agent-prefix.md
@@ -94,22 +95,31 @@ main-orchestrator-mode/
 | `scripts/` | Pure helpers with no host dependency |
 | `adapters/claude/` | Claude Code skill + Workflow script |
 | `adapters/codex/` | Codex skill entry |
-| `AGENTS.md` | Instructions for AI installers/operators |
-| `prompts/install-and-use.md` | Short prompt a human can paste to an AI |
+| `INSTALL.md` | Machine-oriented install steps (AI fetch target) |
+| `AGENTS.md` | Broader AI install/operate contract |
+| `prompts/install-and-use.md` | Short copy-paste prompts |
 
 ## Install
 
 ### Option A — ask an AI to install
 
-把下面提示词贴给 Claude Code / Codex（把 `REPO` 换成本仓库路径或 GitHub URL）：
+参考 [superpowers](https://github.com/obra/superpowers) 的做法：给 AI **一行指令**，让它去拉并执行安装文档，而不是把全部步骤塞进提示词。
+
+贴给 Claude Code / Codex / 其他 agent：
 
 ```text
-按 AGENTS.md 安装 orch 到当前 host（Claude/Codex）。
-REPO: https://github.com/Cyrillico/main-orchestrator-mode
-要求：拷对应 adapter + references；Claude 加 workflows/；Codex 加 scripts/partition_write_tasks.py；去掉个人绝对路径；不改编排合同；装完只回报 installed/host/dest/invoke。
+Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/main/INSTALL.md
 ```
 
-完整安装合同见 `AGENTS.md`。更长英文版见 `prompts/install-and-use.md`。
+本地已 clone 时：
+
+```text
+Fetch and follow instructions from INSTALL.md in this repo.
+```
+
+装完可再问一句：`Confirm orch is installed and tell me the dest path plus how to invoke it.`
+
+细节在 `INSTALL.md`；运行时操作合同在 `AGENTS.md`。
 
 ### Option B — Claude Code manual
 
