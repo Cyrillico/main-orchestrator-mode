@@ -101,9 +101,15 @@ main-orchestrator-mode/
 
 ### Option A — ask an AI to install
 
-Paste `prompts/install-and-use.md` into Claude Code / Codex and point it at this repo path or GitHub URL.
+把下面提示词贴给 Claude Code / Codex（把 `REPO` 换成本仓库路径或 GitHub URL）：
 
-Also see `AGENTS.md` for machine-oriented install steps.
+```text
+按 AGENTS.md 安装 orch 到当前 host（Claude/Codex）。
+REPO: https://github.com/Cyrillico/main-orchestrator-mode
+要求：拷对应 adapter + references；Claude 加 workflows/；Codex 加 scripts/partition_write_tasks.py；去掉个人绝对路径；不改编排合同；装完只回报 installed/host/dest/invoke。
+```
+
+完整安装合同见 `AGENTS.md`。更长英文版见 `prompts/install-and-use.md`。
 
 ### Option B — Claude Code manual
 
