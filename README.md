@@ -23,8 +23,10 @@ Installation differs by harness. If you use more than one, install `orch` separa
 Tell your coding agent:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/main/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.1/INSTALL.md
 ```
+
+Prefer cloning and checking out a tag/SHA, then following local `INSTALL.md`. Floating `main` is convenience, not integrity.
 
 ### Claude Code
 

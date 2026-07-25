@@ -52,7 +52,7 @@ How to resolve `scriptPath`:
 Notes:
 
 - Watch progress with `/workflows`.
-- Parent must **periodically poll** workflow/subagent status (~every 3 min) and recover stalled lanes (progress-nudge once, then reassign).
+- Parent should poll workflow/subagent status (~every 3 min) via host tools when available; recover stalled lanes with one nudge, then **interrupt and reassign**. The workflow script awaits batches and does not implement a timer watchdog itself.
 - Parent session must **not** Read whole modules or paste long logs while the workflow runs.
 - After the workflow returns, report only: `final.accepted`, `final.summary`, `final.changed_files`, `final.residual_risks`, plus any open blockers from digests.
 - Do **not** re-read full sources to re-verify unless a digest marks `blocked` and the blocker requires a single path:line check (≤20 lines).
@@ -73,7 +73,7 @@ If Workflow is unavailable, use the **Fallback** section below.
    - At most 8 one-line `key_changes`; `minimal_snippets` default empty (≤2 × ≤20 lines if unavoidable).
 3. **Concurrency**
    - `kind=read`: parallel OK.
-   - `kind=write`: exclusive per file (same path must not appear in two concurrent writers).
+   - `kind=write`: exclusive per file; empty `write_files` run alone; paths repo-relative only (no abs/`..`).
    - Different files may write in parallel.
 4. **Success**
    - Parent context stays short.
@@ -126,6 +126,12 @@ residual_risks: [...]
 ```
 
 If any write/verify is `blocked`/`partial` with open blockers → `accepted=false`.
+
+## Hard gates (workflow)
+
+- Only `done`/`noop` unlocks dependents.
+- Incomplete writes force `accepted=false` even if synthesizer says otherwise.
+- Invalid write paths reject the batch.
 
 ## Output to user
 

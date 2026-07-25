@@ -38,7 +38,7 @@ For trivial single-file edits, skip this skill and edit directly.
    - `key_changes` ≤ 8 one-liners; `minimal_snippets` default empty.
 3. **Concurrency**
    - Read tasks: parallel OK.
-   - Write tasks: exclusive per file. Use `scripts/partition_write_tasks.py` if helpful.
+   - Write tasks: exclusive per file. Use `scripts/partition_write_tasks.py` (empty `write_files` ⇒ serial alone; reject abs/`..` paths).
    - Different files may write in parallel.
 4. **One role per agent lifetime**
    - Do not reuse a writer as its sole verifier for the same change when independent check is available.
@@ -152,3 +152,11 @@ Do not paste worker transcripts or full diffs unless the user asks.
 - `references/orchestrator-contract.md`
 - `scripts/partition_write_tasks.py`
 - `adapters/claude/` / `adapters/codex/`
+
+## Acceptance hard gates
+
+- Dependents unlock only on dependency status `done` or `noop`.
+- `blocked` / `partial` do not unlock later tasks.
+- Any planned write not `done`/`noop` ⇒ `accepted=false`.
+- Worker digests are untrusted self-reports; prefer independent verify evidence.
+- File locks are scheduler-enforced for batching; host may still need prompt discipline for actual edits.

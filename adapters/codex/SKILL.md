@@ -49,7 +49,7 @@ For trivial single-file edits, skip this skill and edit directly.
    - `key_changes` ≤ 8 one-liners; `minimal_snippets` default empty.
 3. **Concurrency**
    - Read tasks: parallel OK.
-   - Write tasks: exclusive per file. Use `scripts/partition_write_tasks.py` if helpful.
+   - Write tasks: exclusive per file. Use `scripts/partition_write_tasks.py` (empty `write_files` ⇒ serial alone; reject abs/`..` paths).
    - Different files may write in parallel.
 4. **One role per agent lifetime**
    - Do not reuse a writer as its sole verifier for the same change when independent check is available.
@@ -65,7 +65,7 @@ For trivial single-file edits, skip this skill and edit directly.
    - **Alive** if any progress exists: reasoning, text, tool/file/log/command/browser/process activity.
    - **Do not** treat bare wait-timeout alone as dead/stuck.
    - If a lane shows **zero activity for one full poll interval**: send **at most one** short progress nudge (`status / last action / next step / blocker`, ≤5 lines).
-   - If still silent after that nudge **plus one more poll interval**: mark **stalled**, reassign/replace the lane, record incomplete id + last evidence, and continue other ready work.
+   - If still silent after that nudge **plus one more poll interval**: **interrupt/kill**, then reassign/replace; record incomplete id + last evidence.
    - Polling is observation + recovery only; parent still does not implement large edits while workers are active.
 
 ## Control loop
@@ -200,3 +200,11 @@ If using external agents:
 - `references/agent-prefix.md`
 - `references/orchestrator-contract.md`
 - `scripts/partition_write_tasks.py`
+
+## Acceptance hard gates
+
+- Dependents unlock only on dependency status `done` or `noop`.
+- `blocked` / `partial` do not unlock later tasks.
+- Any planned write not `done`/`noop` ⇒ `accepted=false`.
+- Worker digests are untrusted self-reports; prefer independent verify evidence.
+- File locks are scheduler-enforced for batching; host may still need prompt discipline for actual edits.

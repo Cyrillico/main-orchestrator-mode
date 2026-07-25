@@ -10,51 +10,88 @@ Runtime behavior after install is defined only by the installed:
 
 - `SKILL.md`
 - `references/`
+- host adapter extras (`workflows/` or `scripts/`)
 
-Do not treat this file as the orchestration contract.
+## Trust / integrity
+
+Prefer a **pinned** checkout, not floating `main` content alone:
+
+```bash
+git clone https://github.com/Cyrillico/main-orchestrator-mode.git
+cd main-orchestrator-mode
+git checkout v0.1.1   # or a full commit SHA
+```
+
+If you must fetch `INSTALL.md` over HTTP, pin the URL to a tag or commit:
+
+```text
+https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.1/INSTALL.md
+```
+
+Do not treat unpinned `main` as an integrity guarantee.
 
 ## Detect host
 
-Install for every host present, or the host the user named:
+Install only for hosts the user named. If unspecified and both exist, **ask once**; only install both when the user says so.
 
 | Host | Skill root | Adapter |
 |------|------------|---------|
 | Claude Code | `~/.claude/skills/orch` | `adapters/claude/` |
 | Codex | `${CODEX_HOME:-~/.codex}/skills/orch` | `adapters/codex/` |
 
-If both exist and the user did not choose, install both.
-
-Never invent a third skill location unless the user explicitly names it.
+Print the resolved realpath of each destination before writing.
 
 ## Must do
 
-1. Create `<skill-root>/orch/`.
-2. Copy the host adapter `SKILL.md`.
-3. Copy shared `references/agent-prefix.md`, `references/orchestrator-contract.md`, `references/summary-schema.md`.
-4. Claude only: copy `adapters/claude/workflows/main-orchestrator-mode.js`.
-5. Codex only: copy `scripts/partition_write_tasks.py`.
-6. Keep skill-local / relative paths only.
-7. Verify install and report in the format below.
+1. Create destination skill dir.
+2. If destination exists, **backup outside the skills tree** first.
+3. Copy host adapter + shared references (+ workflow or partition script).
+4. Keep skill-local paths only.
+5. Verify install and report.
 
 ## Must not
 
 - Hardcode personal paths like `/Users/<name>/...`
 - Rewrite the orchestration contract while installing
-- Mix Claude Workflow files into a Codex install, or Codex scripts into a Claude install
+- Mix Claude and Codex adapter files into the wrong host
+- Backup into `.../skills/orch.bak-*` (pollutes skill discovery)
 - Install into a project repo unless the user asked for project-local skills
-- Commit secrets, local run digests, or `.orch/` artifacts
-- Leave dual install contracts behind; this file is the only install entrypoint
+
+## Backup location
+
+Use a directory **outside** any skills root:
+
+```bash
+BACKUP_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/orch-backups"
+mkdir -p "$BACKUP_ROOT"
+```
+
+If destination exists:
+
+```bash
+TS=$(date +%Y%m%dT%H%M%S%z)
+BACKUP="$BACKUP_ROOT/orch-$(basename "$(dirname "$DEST")")-$TS"
+mv "$DEST" "$BACKUP"
+test -d "$BACKUP"
+```
+
+Never leave `SKILL.md` backups under `~/.claude/skills/` or `~/.codex/skills/`.
 
 ## Steps
 
-1. Work from this repository root (clone/checkout if needed).
-2. If the destination already exists, back it up once to `orch.bak-<timestamp>`.
-3. Install files:
+Work from this repository root (pinned checkout).
 
 ### Claude Code
 
 ```bash
 DEST="${HOME}/.claude/skills/orch"
+BACKUP_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/orch-backups"
+mkdir -p "$BACKUP_ROOT"
+if [ -e "$DEST" ]; then
+  TS=$(date +%Y%m%dT%H%M%S%z)
+  mv "$DEST" "$BACKUP_ROOT/orch-claude-$TS"
+  test -d "$BACKUP_ROOT/orch-claude-$TS"
+fi
 mkdir -p "$DEST/workflows" "$DEST/references"
 cp adapters/claude/SKILL.md "$DEST/SKILL.md"
 cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md "$DEST/references/"
@@ -65,6 +102,13 @@ cp adapters/claude/workflows/main-orchestrator-mode.js "$DEST/workflows/"
 
 ```bash
 DEST="${CODEX_HOME:-$HOME/.codex}/skills/orch"
+BACKUP_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/orch-backups"
+mkdir -p "$BACKUP_ROOT"
+if [ -e "$DEST" ]; then
+  TS=$(date +%Y%m%dT%H%M%S%z)
+  mv "$DEST" "$BACKUP_ROOT/orch-codex-$TS"
+  test -d "$BACKUP_ROOT/orch-codex-$TS"
+fi
 mkdir -p "$DEST/scripts" "$DEST/references"
 cp adapters/codex/SKILL.md "$DEST/SKILL.md"
 cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md "$DEST/references/"
@@ -72,71 +116,56 @@ cp scripts/partition_write_tasks.py "$DEST/scripts/"
 chmod +x "$DEST/scripts/partition_write_tasks.py" || true
 ```
 
-4. Verify:
+## Verify
 
-- required files exist under each dest
-- no personal absolute paths remain in installed files
-- Claude: `SKILL.md`, `workflows/main-orchestrator-mode.js`, and the three reference files exist
-- Codex: `SKILL.md`, `scripts/partition_write_tasks.py`, and the three reference files exist
-- Codex only: run the partition smoke test below
+- required files exist
+- no personal absolute paths in installed skill files
+- no `orch.bak-*` directories remain under skills roots
+- Codex: partition smoke test
 
 ```bash
 python3 "${CODEX_HOME:-$HOME/.codex}/skills/orch/scripts/partition_write_tasks.py" <<'JSON'
-[{"id":"w1","write_files":["a.ts"]},{"id":"w2","write_files":["a.ts","b.ts"]},{"id":"w3","write_files":["c.ts"]}]
+[
+  {"id":"e1","write_files":[]},
+  {"id":"w1","write_files":["a.ts"]},
+  {"id":"w2","write_files":["././a.ts"]},
+  {"id":"w3","write_files":["b.ts"]}
+]
 JSON
 ```
 
-Expected idea: `w1` and `w3` can share a batch; `w2` conflicts on `a.ts`.
+Expected idea:
+
+- `e1` alone
+- `w1` then `w2` (same normalized path `a.ts`, exclusive)
+- `w3` may share a batch with neither conflicting empty task
+
+Reject paths with `..` or absolute prefixes.
 
 ## Update / reinstall
 
-1. Detect existing `<skill-root>/orch`.
-2. Backup once to `orch.bak-<timestamp>` if present.
-3. Overwrite from this repo adapter + shared references/scripts.
-4. Preserve only user notes that live outside the skill pack paths.
-5. Re-run verification.
-6. Report changed paths.
+Same as install: backup outside skills tree, overwrite, verify, report backup path.
 
 ## Failure modes
 
 | Symptom | Action |
 |---------|--------|
-| Adapter files missing in repo | Stop; report packaging incomplete; do not invent host scripts |
-| Unknown skill root | Ask once, or install to the documented default and state the assumption |
-| Existing customized `orch` skill | Backup, then reinstall; mention the backup path |
-| Workflow tool unavailable in Claude | Install files anyway; runtime falls back to the control loop in the installed `SKILL.md` |
-| User wants project-local skill | Install under the project path they named; still avoid personal absolute paths |
-| Partition script smoke fails | Do not claim Codex install success; fix script/path and retry |
-
-## Acceptance
-
-Install succeeds only if all are true:
-
-- correct host skill directory populated
-- no personal absolute paths remain
-- required adapter files present
-- shared references present
-- partition script works for Codex installs
-- report uses the format below
+| Adapter files missing | Stop; do not invent files |
+| Unknown skill root | Ask; do not guess a third location |
+| Backup fails | Abort install (fail closed) |
+| `orch.bak-*` under skills/ | Move them to `~/.local/share/orch-backups/` and remove from skills discovery |
+| Partition smoke fails | Do not claim Codex success |
 
 ## Report format
-
-Return only:
 
 ```text
 installed: yes|no
 host: claude|codex|both|unknown
-dest: <path(s)>
+dest: <realpath(s)>
+backup: <path(s)|none>
 files:
 - ...
 invoke: /orch <goal>
 notes:
 - ...
 ```
-
-## After install
-
-Point the user to the installed skill:
-
-- invoke: `/orch <goal>` or natural-language multi-file orchestration
-- operate only from installed `SKILL.md` + `references/`
