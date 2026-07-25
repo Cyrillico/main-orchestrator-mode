@@ -1,0 +1,67 @@
+{
+  "tasks": [
+    {
+      "id": "r1",
+      "kind": "read",
+      "goal": "Locate login route and existing middleware hooks",
+      "read_files": [
+        "src/routes/auth.ts",
+        "src/middleware"
+      ],
+      "write_files": [],
+      "depends_on": []
+    },
+    {
+      "id": "r2",
+      "kind": "read",
+      "goal": "Find existing rate-limit utilities or patterns",
+      "read_files": [
+        "src/lib",
+        "src/middleware"
+      ],
+      "write_files": [],
+      "depends_on": []
+    },
+    {
+      "id": "w1",
+      "kind": "write",
+      "goal": "Add token-bucket rate limit middleware",
+      "read_files": [
+        "src/middleware"
+      ],
+      "write_files": [
+        "src/middleware/rateLimit.ts"
+      ],
+      "depends_on": [
+        "r1",
+        "r2"
+      ]
+    },
+    {
+      "id": "w2",
+      "kind": "write",
+      "goal": "Wire rate limit middleware onto POST /login",
+      "read_files": [
+        "src/routes/auth.ts"
+      ],
+      "write_files": [
+        "src/routes/auth.ts"
+      ],
+      "depends_on": [
+        "r1",
+        "w1"
+      ]
+    },
+    {
+      "id": "v1",
+      "kind": "verify",
+      "goal": "Run focused auth/rate-limit tests",
+      "read_files": [],
+      "write_files": [],
+      "depends_on": [
+        "w1",
+        "w2"
+      ]
+    }
+  ]
+}

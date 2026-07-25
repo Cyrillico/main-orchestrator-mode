@@ -1,0 +1,25 @@
+{
+  "status": "done",
+  "goal": "Wire rate limit middleware onto POST /login",
+  "conclusion": "Middleware attached to login route; no other routes changed",
+  "read_files": [
+    "src/routes/auth.ts",
+    "src/middleware/rateLimit.ts"
+  ],
+  "write_files": [
+    "src/routes/auth.ts"
+  ],
+  "key_changes": [
+    {
+      "file": "src/routes/auth.ts",
+      "summary": "Apply rateLimit middleware to POST /login",
+      "lines_hint": "40-52"
+    }
+  ],
+  "risks": [
+    "in-memory limiter not multi-instance safe"
+  ],
+  "blockers": [],
+  "next_suggestion": "Add integration test for 429 after burst",
+  "minimal_snippets": []
+}

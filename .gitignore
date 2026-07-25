@@ -1,0 +1,9 @@
+.DS_Store
+.orch/
+*.bak
+*.bak-*
+.orch.bak-*
+__pycache__/
+*.pyc
+.idea/
+.vscode/
