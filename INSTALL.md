@@ -19,13 +19,13 @@ Prefer a **pinned** checkout, not floating `main` content alone:
 ```bash
 git clone https://github.com/Cyrillico/main-orchestrator-mode.git
 cd main-orchestrator-mode
-git checkout v0.1.1   # or a full commit SHA
+git checkout v0.1.2   # or a full commit SHA
 ```
 
 If you must fetch `INSTALL.md` over HTTP, pin the URL to a tag or commit:
 
 ```text
-https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.1/INSTALL.md
+https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.2/INSTALL.md
 ```
 
 Do not treat unpinned `main` as an integrity guarantee.
@@ -112,8 +112,8 @@ fi
 mkdir -p "$DEST/scripts" "$DEST/references"
 cp adapters/codex/SKILL.md "$DEST/SKILL.md"
 cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md "$DEST/references/"
-cp scripts/partition_write_tasks.py "$DEST/scripts/"
-chmod +x "$DEST/scripts/partition_write_tasks.py" || true
+cp scripts/partition_write_tasks.py scripts/orch_paths.py scripts/audit_write_grant.py "$DEST/scripts/"
+chmod +x "$DEST/scripts/partition_write_tasks.py" "$DEST/scripts/audit_write_grant.py" || true
 ```
 
 ## Verify

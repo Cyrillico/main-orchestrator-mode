@@ -17,38 +17,11 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
-
-class PathError(ValueError):
-    pass
-
-
-def normalize_path(p: str) -> str:
-    s = str(p or "").replace("\\", "/").strip()
-    if not s:
-        raise PathError("empty path")
-    if s.startswith("~") or s.startswith("/"):
-        raise PathError(f"absolute/home path not allowed: {p!r}")
-    # Windows drive / UNC style
-    if len(s) >= 2 and s[1] == ":":
-        raise PathError(f"absolute path not allowed: {p!r}")
-    if s.startswith("//"):
-        raise PathError(f"unc path not allowed: {p!r}")
-
-    while s.startswith("./"):
-        s = s[2:]
-
-    parts: list[str] = []
-    for part in s.split("/"):
-        if part in ("", "."):
-            continue
-        if part == "..":
-            raise PathError(f"parent path segment not allowed: {p!r}")
-        parts.append(part)
-    if not parts:
-        raise PathError(f"invalid path: {p!r}")
-    return "/".join(parts)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from orch_paths import PathError, normalize_path  # noqa: E402
 
 
 def normalize_task(t: dict[str, Any]) -> dict[str, Any]:
@@ -65,7 +38,6 @@ def partition(tasks: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     batches: list[list[dict[str, Any]]] = []
 
     while remaining:
-        # Contract: empty write_files run alone (serial defensive).
         empty_idx = next((i for i, t in enumerate(remaining) if not t.get("write_files")), None)
         if empty_idx is not None:
             batches.append([remaining.pop(empty_idx)])
@@ -85,7 +57,6 @@ def partition(tasks: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
             batch.append(t)
             remaining.pop(i)
         if not batch and remaining:
-            # Should be unreachable for non-empty write_files, but keep fail-closed serial.
             batch.append(remaining.pop(0))
         batches.append(batch)
     return batches

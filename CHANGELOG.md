@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.2 — 2026-07-26
+
+- Add optional worker `evidence[]` (command/test/pathspec/git/audit/note)
+- Add `scripts/audit_write_grant.py` post-batch grant audit
+- Share path normalize via `scripts/orch_paths.py`
+- Claude workflow surfaces missing verify evidence as residual risk
+
 - Harden partitioner: empty-serial, strict repo-relative paths, reject abs/`..`
 - Claude workflow: success-only deps, hard accept gate, incomplete in FINAL
 - INSTALL: backup outside skills tree; prefer pinned tag/SHA; bak no longer under skills/

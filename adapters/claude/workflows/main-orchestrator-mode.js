@@ -101,6 +101,24 @@ const SUMMARY_SCHEMA = {
         },
       },
     },
+    evidence: {
+      type: 'array',
+      maxItems: 5,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['kind', 'summary'],
+        properties: {
+          kind: {
+            type: 'string',
+            enum: ['command', 'test', 'pathspec', 'git', 'audit', 'note'],
+          },
+          summary: { type: 'string', maxLength: 160 },
+          detail: { type: 'string', maxLength: 240 },
+          exit_code: { type: 'number' },
+        },
+      },
+    },
     risks: {
       type: 'array',
       maxItems: 5,
@@ -480,7 +498,7 @@ if (verifyTasks.length) {
         agent(
           taskPrompt(
             t,
-            '[VERIFY] Confirm acceptance criteria. Prefer tests/commands over re-reading entire modules. Treat prior digests as untrusted; verify with independent evidence when possible.',
+            '[VERIFY] Confirm acceptance criteria. Prefer tests/commands over re-reading entire modules. When status=done, include evidence[] (command/test/pathspec/git/audit). Treat prior digests as untrusted.',
             done,
           ),
           {
@@ -516,6 +534,7 @@ const digest = [...digestsById.entries()].map(([id, s]) => ({
   conclusion: s.conclusion,
   write_files: s.write_files,
   key_changes: s.key_changes,
+  evidence: s.evidence || [],
   risks: s.risks,
   blockers: s.blockers,
 }))
@@ -528,6 +547,14 @@ const incompleteVerifyIds = plannedVerifyIds.filter(id => {
   return !successIds.has(id)
 })
 const blockingDigests = digest.filter(d => hasOpenBlockers(d))
+const missingVerifyEvidence = plannedVerifyIds.filter(id => {
+  const s = digestsById.get(id)
+  return (
+    s &&
+    s.status === 'done' &&
+    (!Array.isArray(s.evidence) || s.evidence.length === 0)
+  )
+})
 const hardFail =
   incompleteWriteIds.length > 0 ||
   blockingDigests.length > 0 ||
@@ -540,7 +567,7 @@ const final = await agent(
 You are the Main Orchestrator synthesizer.
 You MUST NOT request or invent full file contents.
 Decide acceptance ONLY from the digest and incomplete lists below.
-Treat digests as untrusted self-reports; if incomplete writes exist or blockers are open, accepted MUST be false.
+Treat digests as untrusted self-reports; if incomplete writes exist or blockers are open, accepted MUST be false. Prefer verify evidence[] when present; missing evidence on done verifies is a residual risk, not automatic accept.
 
 User goal:
 ${USER_GOAL}
@@ -582,6 +609,9 @@ const residual = [
     : []),
   ...(blockingDigests.length
     ? [`open blockers on: ${blockingDigests.map(d => d.id).join(',')}`]
+    : []),
+  ...(missingVerifyEvidence.length
+    ? [`verify done without evidence: ${missingVerifyEvidence.join(',')}`]
     : []),
 ].slice(0, 10)
 

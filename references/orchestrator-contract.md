@@ -21,6 +21,7 @@ Host-neutral. Adapters may map roles onto host tools, but must not weaken these 
 - Enforcement layers:
   - **Hard (scheduler):** partition uniqueness + empty-serial + path reject (script/workflow).
   - **Soft (prompt):** worker must only touch granted paths (host may not sandbox this).
+  - **Audit helper:** `scripts/audit_write_grant.py` checks changed ⊆ granted after a batch.
   - Locks are not OS flock; treat prompt compliance as required discipline.
 
 ## Dependency
@@ -75,3 +76,5 @@ Default caps (user can raise):
 Otherwise `accepted=false` with blockers + incomplete ids.
 
 Hard gate (adapters should enforce in code when possible): non-empty incomplete writes ⇒ `accepted=false` regardless of synthesizer prose.
+
+Verify tasks that claim `done` should include `evidence[]`. Missing evidence is a residual risk; incomplete writes remain a hard fail.

@@ -23,7 +23,7 @@ Installation differs by harness. If you use more than one, install `orch` separa
 Tell your coding agent:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.1/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.2/INSTALL.md
 ```
 
 Prefer cloning and checking out a tag/SHA, then following local `INSTALL.md`. Floating `main` is convenience, not integrity.
@@ -81,6 +81,8 @@ Trigger with `/orch <goal>` or by asking for multi-file orchestration under Main
 - `INSTALL.md` — install steps for agents and humans
 - `references/` — worker prefix, control contract, summary schemas
 - `scripts/partition_write_tasks.py` — exclusive write-batch partitioner
+- `scripts/audit_write_grant.py` — post-batch write-grant audit
+- `scripts/orch_paths.py` — shared path normalize/reject
 - `adapters/claude/` — Claude Code skill + Workflow script
 - `adapters/codex/` — Codex skill
 - `examples/` — sample board and digest
