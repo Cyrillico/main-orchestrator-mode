@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.1.6 — 2026-07-26
+
+- Both Python scripts set `sys.dont_write_bytecode`: importing the shared `orch_paths`
+  dropped a `__pycache__/` into the installed skill tree on every run, which
+  `INSTALL.md` forbids as skill-discovery pollution. Found by running the 0.1.5 audit
+  from a real install
+- Audit test asserts it: the assertion clears the dir first, because an earlier-run
+  cache made the first version of this check pass vacuously
+
 ## 0.1.5 — 2026-07-26
 
 Audit and scheduler correctness. Found by reviewing the shipped code against the
@@ -27,13 +36,12 @@ contract; each item below was reproduced before it was fixed.
 - Dead code: `doneIds` removed; `lockKey` wired into the JS partitioner (its Python
   twin `lock_key` was already live)
 - Contract records all four rules; adapters document `base` in git mode
-- New `tests/` (repo-only, no deps): 28 assertions covering every fix above. The
+- New `tests/` (repo-only, no deps): 29 assertions covering every fix above. The
   scheduler suite stubs the Workflow runtime and evaluates the shipped script rather
   than reimplementing it; both suites accept a path so an installed skill can be
   checked in place
 - INSTALL verify step gains a git-mode-without-`base` assertion, which is also how you
   detect a stale pre-0.1.5 install
-
 ## 0.1.4 — 2026-07-26
 
 - Claude install now ships `scripts/audit_write_grant.py` + `scripts/orch_paths.py`; the contract's audit layer was previously Codex-only, so Claude installs had a dangling reference

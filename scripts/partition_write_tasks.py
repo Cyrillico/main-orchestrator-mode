@@ -20,6 +20,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Importing a sibling module would drop __pycache__/ into the installed skill tree,
+# which INSTALL.md forbids (it pollutes skill discovery).
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from orch_paths import PathError, lock_key, normalize_path  # noqa: E402
 

@@ -11,6 +11,7 @@ out-of-grant edits leaves a clean working tree, so a porcelain-only audit passed
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -120,6 +121,20 @@ with tempfile.TemporaryDirectory() as td:
         {"granted": ["src/a.ts"], "git": True, "repo": str(repo), "base": "nope"}
     )
     check("bad base ref errors (exit 2)", code == 2, out)
+
+# ---- no bytecode artifacts in the skill tree ----
+# The script imports a sibling module; without sys.dont_write_bytecode that drops a
+# __pycache__/ into the installed skill dir, which INSTALL.md forbids.
+# Clear first: earlier runs in this file would otherwise make the check vacuous.
+# (__pycache__ is a build artifact, safe to drop.)
+cache = SCRIPTS / "__pycache__"
+shutil.rmtree(cache, ignore_errors=True)
+run_audit({"granted": ["src/a.ts"], "changed": ["src/a.ts"]})
+check(
+    "running the audit leaves no __pycache__ beside it",
+    not cache.exists(),
+    f"created {cache}",
+)
 
 print(f"\n{failures} FAILURE(S)" if failures else "\nall green")
 raise SystemExit(1 if failures else 0)
