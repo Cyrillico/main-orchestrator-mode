@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+Runtime-risk audit of v0.1.6, run against a real install. Every item below was
+reproduced by executing the shipped script with stubbed Workflow globals before it was
+fixed; each has a regression test in `tests/workflow-scheduler.test.mjs`.
+
+- **Duplicate planner ids silently lost work and still reported success.** Every
+  registry (`done`, `successIds`, `digestsById`) is keyed by task id, so two tasks
+  sharing an id both ran in one batch, the second digest overwrote the first, the loser's
+  `write_files` never reached `changed_files`, and dependents unlocked off whichever
+  digest survived. `accepted=true` with real edits missing from the report. Duplicate ids
+  are now rejected before spawn; the first task with an id keeps it.
+- **Read workers could be handed write tools and a write grant.** `agent_type: 'claude'`
+  on a `kind=read` task routed it to the full-tool catch-all agent, and the prompt printed
+  `Granted write_files: [...]` directly above `[READ-ONLY] No file mutations allowed`.
+  Because only *planned* writes feed `changed_files`, a read worker's edits landed
+  invisibly and the run still accepted. Reads are now pinned to the read-only agent and
+  their write grant is dropped (with a log line when the planner supplied one).
+- **Worker-reported `write_files` was never re-checked.** The up-front guard validated
+  what the planner asked for; a digest claiming `["src/a.ts","/etc/passwd"]` was accepted
+  verbatim and flowed into `changed_files`. Pure path comparison needs no shell, so the
+  scheduler now enforces reported ⊆ granted and blocks the task otherwise. The disk-level
+  check still requires `scripts/audit_write_grant.py`.
+- **Deadlocked, starved and skipped tasks left no digest.** A `depends_on` cycle or
+  self-reference, exhausting the 20-batch guard, or a verify whose write never succeeded
+  all failed closed correctly but surfaced only as an id in `incomplete[]` plus a log line
+  the parent is told not to read. Each now gets a `blocked` digest naming the cause.
+- Zero-verify plans still accept (the contract's "if any"), but now report
+  `no verify task was planned` as a residual risk; a run with changed files also reports
+  that the in-script audit is path-level only and `audit_write_grant.py` was not run.
+- Docs: `.orch/<run-id>/` is a parent/Fallback duty. The workflow script has no
+  filesystem access, so a Workflow run never creates it and digests exist only in the
+  return value — `adapters/claude/SKILL.md` and `references/orchestrator-contract.md` said
+  "prefer digests on disk" without saying nothing on the preferred path can write them.
+- Docs: `references/agent-prefix.md` notes that the workflow script carries a hand-synced
+  inline copy and cannot read the file at run time.
+
+Deliberately unchanged: the script still ignores the `budget` global (fan-out is not
+token-capped), still requests up to 40 concurrent writers in one batch, and still runs
+every worker in the parent's working tree with no `isolation: 'worktree'` and no
+prohibition on `git commit`/`push`. Those are policy calls, not defects.
+
 ## 0.1.6 — 2026-07-26
 
 - Both Python scripts set `sys.dont_write_bytecode`: importing the shared `orch_paths`

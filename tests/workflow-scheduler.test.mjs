@@ -20,9 +20,13 @@ const src = readFileSync(SRC, 'utf8').replace('export const meta', 'const meta')
 function makeRunner({ plan, summaries, finalOut }) {
   const spawned = []
   const logs = []
+  const optsByLabel = new Map()
+  const promptByLabel = new Map()
   const agent = async (prompt, opts) => {
     const label = opts.label
     spawned.push(label)
+    optsByLabel.set(label, opts)
+    promptByLabel.set(label, prompt)
     if (label === 'plan') return plan
     if (label === 'synthesize') return finalOut
     const id = label.split(':')[1]
@@ -54,6 +58,8 @@ function makeRunner({ plan, summaries, finalOut }) {
     run: () => fn(agent, parallel, log, phase, { goal: 'test goal' }, { total: null }),
     spawned,
     logs,
+    optsFor: label => optsByLabel.get(label) || {},
+    promptFor: label => promptByLabel.get(label) || '',
   }
 }
 
@@ -198,6 +204,117 @@ function check(name, cond, detail) {
   await r.run()
   const batches = r.logs.filter(l => l.startsWith('Write batch:'))
   check('case variants never share a batch', batches.length === 2, batches)
+}
+
+// Two tasks sharing an id overwrote each other's digest: both ran, one write_files set
+// vanished from changed_files, and the run still reported accepted.
+{
+  const r = makeRunner({
+    plan: {
+      tasks: [
+        { id: 'w1', kind: 'write', goal: 'first', read_files: [], write_files: ['src/a.ts'] },
+        { id: 'w1', kind: 'write', goal: 'second', read_files: [], write_files: ['src/b.ts'] },
+      ],
+    },
+    summaries: { w1: ok('w1', ['src/a.ts']) },
+    finalOut: accept({ changed_files: ['src/a.ts'] }),
+  })
+  const out = await r.run()
+  check('duplicate id spawns only one worker', r.spawned.filter(s => s === 'write:w1').length === 1, r.spawned)
+  check(
+    'duplicate id is reported as blocked',
+    out.digests.some(d => d.id.startsWith('w1#dup') && d.status === 'blocked'),
+    out.digests.map(d => [d.id, d.status]),
+  )
+  check('duplicate id forces reject', out.final.accepted === false, out.final)
+}
+
+// A read task must never carry a write grant, nor get a write-capable agent.
+{
+  const r = makeRunner({
+    plan: {
+      tasks: [
+        { id: 'r1', kind: 'read', goal: 'g', read_files: ['src/a.ts'], write_files: ['src/a.ts'], agent_type: 'claude' },
+      ],
+    },
+    summaries: { r1: ok('r1') },
+    finalOut: accept(),
+  })
+  await r.run()
+  const o = r.optsFor('read:r1')
+  check('read agent is always read-only', o.agentType === 'Explore', o.agentType)
+  check(
+    'read prompt carries no write grant',
+    r.promptFor('read:r1').includes('Granted write_files: []'),
+    r.promptFor('read:r1').split('\n').filter(l => l.includes('Granted')),
+  )
+}
+
+// A worker's self-reported write_files must be checked against its grant.
+{
+  const r = makeRunner({
+    plan: { tasks: [{ id: 'w1', kind: 'write', goal: 'g', read_files: [], write_files: ['src/a.ts'] }] },
+    summaries: { w1: ok('w1', ['src/a.ts', '/etc/passwd']) },
+    finalOut: accept({ changed_files: ['src/a.ts'] }),
+  })
+  const out = await r.run()
+  check('out-of-grant self-report is blocked', out.digests[0].status === 'blocked', out.digests)
+  check('out-of-grant self-report rejects the run', out.final.accepted === false, out.final)
+  check('offending path named in blockers', out.digests[0].blockers.join(' ').includes('/etc/passwd'), out.digests[0].blockers)
+}
+
+// A read reporting any edit at all is out of role: its grant is empty.
+{
+  const r = makeRunner({
+    plan: { tasks: [{ id: 'r1', kind: 'read', goal: 'g', read_files: ['src/a.ts'], write_files: [] }] },
+    summaries: { r1: ok('r1', ['src/leaked.ts']) },
+    finalOut: accept(),
+  })
+  const out = await r.run()
+  check('read that reports an edit is blocked', out.digests[0].status === 'blocked', out.digests)
+  check('read escalation rejects the run', out.final.accepted === false, out.final)
+}
+
+// Deadlocked / never-ready tasks must explain themselves in a digest.
+{
+  const r = makeRunner({
+    plan: {
+      tasks: [
+        { id: 'w1', kind: 'write', goal: 'g', read_files: [], write_files: ['src/a.ts'], depends_on: ['w2'] },
+        { id: 'w2', kind: 'write', goal: 'g', read_files: [], write_files: ['src/b.ts'], depends_on: ['w1'] },
+        { id: 'v1', kind: 'verify', goal: 'g', read_files: [], write_files: [], depends_on: ['w1'] },
+      ],
+    },
+    summaries: {},
+    finalOut: accept(),
+  })
+  const out = await r.run()
+  const byId = Object.fromEntries(out.digests.map(d => [d.id, d]))
+  check('cycle members get a digest', !!byId.w1 && !!byId.w2, out.digests.map(d => d.id))
+  check('cycle digest names depends_on', (byId.w1 || {}).blockers.join(' ').includes('depends_on'), byId.w1)
+  check('skipped verify gets a digest', ((byId.v1 || {}).status) === 'blocked', byId.v1)
+  check('cycle rejects the run', out.final.accepted === false, out.final)
+}
+
+// A write-only plan is allowed, but the missing verify is reported.
+{
+  const r = makeRunner({
+    plan: { tasks: [{ id: 'w1', kind: 'write', goal: 'g', read_files: [], write_files: ['src/a.ts'] }] },
+    summaries: { w1: ok('w1', ['src/a.ts']) },
+    finalOut: accept({ changed_files: ['src/a.ts'] }),
+  })
+  const out = await r.run()
+  check('write-only plan still accepts', out.final.accepted === true, out.final)
+  check(
+    'missing verify surfaces as residual risk',
+    out.final.residual_risks.some(x => x.includes('no verify task')),
+    out.final.residual_risks,
+  )
+  check(
+    'un-run grant audit surfaces as residual risk',
+    out.final.residual_risks.some(x => x.includes('audit_write_grant')),
+    out.final.residual_risks,
+  )
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green')

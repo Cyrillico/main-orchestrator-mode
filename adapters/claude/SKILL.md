@@ -97,6 +97,9 @@ If Workflow is unavailable, use the **Fallback** section below.
 4. **Success**
    - Parent context stays short.
    - Prefer digests on disk (`.orch/<run-id>/`) over re-injecting worker transcripts.
+     This is a **parent/Fallback** duty: the workflow script has no filesystem access, so
+     a Workflow run never creates `.orch/` and its digests only exist in the return value.
+     Do not expect run artifacts on disk after the preferred path.
    - Zero dual-writers on one file.
    - Acceptance decided from digests only.
 

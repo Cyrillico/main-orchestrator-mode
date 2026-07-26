@@ -2,6 +2,10 @@
 
 Paste at the top of every worker prompt.
 
+> Note: `adapters/claude/workflows/main-orchestrator-mode.js` cannot read this file at run
+> time, so it carries its own inlined copy (`AGENT_PREFIX`). The two are hand-synced —
+> editing only this file changes nothing about a Workflow run. Update both.
+
 ```text
 [ROLE] Subagent under Main Orchestrator Mode.
 
