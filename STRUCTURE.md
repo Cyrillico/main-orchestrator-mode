@@ -1,10 +1,10 @@
 # Layout
 
 ```text
-SKILL.md / adapters/{claude,codex}/   # install entry (short)
+SKILL.md / adapters/{claude,codex}/   # install entry (short + safety defaults)
 references/                           # contract + schema + prefix
-scripts/                              # partition, paths, audit
-tests/                                # scheduler regression
+scripts/                              # partition, paths, audit, accept gate
+tests/                                # scheduler + script regressions
 INSTALL.md README.md
 ```
 

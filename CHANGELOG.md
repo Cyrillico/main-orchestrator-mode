@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.1.10 — 2026-07-26
+
+Application-safety defaults (without gutting v0.1.5–0.1.7 hard gates):
+
+- **Single-file skip** at the top of host-neutral and adapter SKILL docs
+- **Codex control loop:** pre-batch `BASE` + `partition_write_tasks.py` and post-batch accept gate are required, not optional
+- **Claude post-return:** parent must run accept gate before treating a write-bearing run as clean; Workflow residual names the gate
+- New helper `scripts/accept_with_audit.py` — `scheduler_accepted` ∧ disk grant audit (`base` required in git mode)
+- Contract section **Application-safety defaults**; INSTALL verify covers accept-gate smokes
+- Claude installs ship partition script too (Fallback / explicit parent use)
+
 ## 0.1.9 — 2026-07-26
 
 - Grill-me-style thinner SKILL triggers (~25–35 lines)

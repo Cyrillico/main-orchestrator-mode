@@ -19,13 +19,13 @@ Prefer a **pinned** checkout, not floating `main` content alone:
 ```bash
 git clone https://github.com/Cyrillico/main-orchestrator-mode.git
 cd main-orchestrator-mode
-git checkout v0.1.9   # or a full commit SHA
+git checkout v0.1.10   # or a full commit SHA
 ```
 
 If you must fetch `INSTALL.md` over HTTP, pin the URL to a tag or commit:
 
 ```text
-https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.9/INSTALL.md
+https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.10/INSTALL.md
 ```
 
 Do not treat unpinned `main` as an integrity guarantee.
@@ -92,18 +92,16 @@ if [ -e "$DEST" ]; then
   mv "$DEST" "$BACKUP_ROOT/orch-claude-$TS"
   test -d "$BACKUP_ROOT/orch-claude-$TS"
 fi
-mkdir -p "$DEST/workflows" "$DEST/references" "$DEST/scripts"
+mkdir -p "$DEST/workflows" "$DEST/references" "$DEST/scripts" "$DEST/agents"
 cp adapters/claude/SKILL.md "$DEST/SKILL.md"
+cp adapters/claude/agents/openai.yaml "$DEST/agents/" 2>/dev/null || true
 cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md "$DEST/references/"
 cp adapters/claude/workflows/main-orchestrator-mode.js "$DEST/workflows/"
-cp scripts/audit_write_grant.py scripts/orch_paths.py "$DEST/scripts/"
-chmod +x "$DEST/scripts/audit_write_grant.py" || true
+cp scripts/partition_write_tasks.py scripts/orch_paths.py scripts/audit_write_grant.py scripts/accept_with_audit.py "$DEST/scripts/"
+chmod +x "$DEST/scripts/"*.py || true
 ```
 
-`scripts/` is required: `references/orchestrator-contract.md` names
-`scripts/audit_write_grant.py` as the write-grant audit layer, so a Claude install
-without it leaves that reference dangling. The Claude scheduler partitions write
-batches in the workflow script, so `partition_write_tasks.py` is Codex-only.
+Claude Workflow partitions in-script; `scripts/` still required for post-return accept gate, Fallback partition, and disk audit.
 
 ### Codex
 
@@ -116,11 +114,12 @@ if [ -e "$DEST" ]; then
   mv "$DEST" "$BACKUP_ROOT/orch-codex-$TS"
   test -d "$BACKUP_ROOT/orch-codex-$TS"
 fi
-mkdir -p "$DEST/scripts" "$DEST/references"
+mkdir -p "$DEST/scripts" "$DEST/references" "$DEST/agents"
 cp adapters/codex/SKILL.md "$DEST/SKILL.md"
+cp adapters/codex/agents/openai.yaml "$DEST/agents/" 2>/dev/null || true
 cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md "$DEST/references/"
-cp scripts/partition_write_tasks.py scripts/orch_paths.py scripts/audit_write_grant.py "$DEST/scripts/"
-chmod +x "$DEST/scripts/partition_write_tasks.py" "$DEST/scripts/audit_write_grant.py" || true
+cp scripts/partition_write_tasks.py scripts/orch_paths.py scripts/audit_write_grant.py scripts/accept_with_audit.py "$DEST/scripts/"
+chmod +x "$DEST/scripts/"*.py || true
 ```
 
 ## Verify
@@ -146,10 +145,26 @@ python3 "<skill-root>/scripts/audit_write_grant.py" <<'JSON'
 JSON
 ```
 
-- Codex: partition smoke test
+- both hosts: accept-gate smoke (scheduler true + in-grant → exit 0)
 
 ```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/skills/orch/scripts/partition_write_tasks.py" <<'JSON'
+python3 "<skill-root>/scripts/accept_with_audit.py" <<'JSON'
+{"scheduler_accepted":true,"granted":["src/a.ts"],"changed":["src/a.ts"]}
+JSON
+```
+
+- both hosts: accept-gate without `base` in git mode → exit 2
+
+```bash
+python3 "<skill-root>/scripts/accept_with_audit.py" <<'JSON'
+{"scheduler_accepted":true,"granted":["src/a.ts"],"git":true,"repo":"."}
+JSON
+```
+
+- Codex (and Claude Fallback): partition smoke test
+
+```bash
+python3 "<skill-root>/scripts/partition_write_tasks.py" <<'JSON'
 [
   {"id":"e1","write_files":[]},
   {"id":"w1","write_files":["a.ts"]},
@@ -179,8 +194,8 @@ Same as install: backup outside skills tree, overwrite, verify, report backup pa
 | Unknown skill root | Ask; do not guess a third location |
 | Backup fails | Abort install (fail closed) |
 | `orch.bak-*` under skills/ | Move them to `~/.local/share/orch-backups/` and remove from skills discovery |
-| Partition smoke fails | Do not claim Codex success |
-| Audit smoke fails | Do not claim the write-grant audit layer is available |
+| Partition smoke fails | Do not claim partition layer is available |
+| Audit / accept-gate smoke fails | Do not claim the write-grant accept layer is available |
 
 ## Report format
 

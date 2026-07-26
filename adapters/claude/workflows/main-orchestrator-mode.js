@@ -817,7 +817,7 @@ const residual = [
     ? ['no verify task was planned; writes are accepted on the writers own report']
     : []),
   ...(changedFromDigests.length
-    ? ['grant audit not run in-script: run scripts/audit_write_grant.py with a pre-batch base']
+    ? ['disk grant audit required before clean: run scripts/accept_with_audit.py (audit_write_grant + base)']
     : []),
 ].slice(0, 10)
 
