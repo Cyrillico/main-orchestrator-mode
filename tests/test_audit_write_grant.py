@@ -80,6 +80,12 @@ check("grant match is case-insensitive", code == 0, out)
 code, out = run_audit({"granted": ["/etc/passwd"], "changed": ["src/a.ts"]})
 check("absolute grant path exits 2", code == 2, code)
 
+code, out = run_audit({
+    "granted": ["/Volumes/x/Noodlize/src/a.ts"],
+    "changed": ["src/a.ts"],
+})
+check("in-repo abs grant strips", code == 0 and out.get("granted") == ["src/a.ts"], out)
+
 code, out = run_audit({"granted": [], "changed": ["src/a.ts"]})
 check("empty grant with changes fails closed", code == 1, out)
 

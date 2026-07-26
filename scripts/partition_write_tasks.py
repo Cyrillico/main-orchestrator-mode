@@ -27,17 +27,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from orch_paths import PathError, lock_key, normalize_path  # noqa: E402
 
 
-def normalize_task(t: dict[str, Any]) -> dict[str, Any]:
+def normalize_task(t: dict[str, Any], repo_root: str | None = None) -> dict[str, Any]:
     item = dict(t)
     raw_files = t.get("write_files") or []
     if not isinstance(raw_files, list):
         raise PathError(f"write_files must be a list for task {t.get('id')!r}")
-    item["write_files"] = [normalize_path(p) for p in raw_files]
+    item["write_files"] = [normalize_path(p, repo_root=repo_root) for p in raw_files]
     return item
 
 
-def partition(tasks: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
-    remaining: list[dict[str, Any]] = [normalize_task(t) for t in tasks]
+def partition(tasks: list[dict[str, Any]], repo_root: str | None = None) -> list[list[dict[str, Any]]]:
+    remaining: list[dict[str, Any]] = [normalize_task(t, repo_root=repo_root) for t in tasks]
     batches: list[list[dict[str, Any]]] = []
 
     while remaining:

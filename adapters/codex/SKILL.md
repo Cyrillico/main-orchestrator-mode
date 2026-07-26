@@ -7,7 +7,7 @@ description: Main Orchestrator Mode for multi-file work — parallel read-only e
 
 **Do not use** for trivial single-file edits — edit directly.
 
-Parent schedules/locks/merges/accepts. Digests only. Parallel reads; exclusive writes. Prefer digests in `.orch/<run-id>/`. Use Codex multi-agent tools.
+Parent schedules/locks/merges/accepts. Digests only. Parallel reads; exclusive writes. Prefer digests in `.orch/<run-id>/`. Use Codex multi-agent tools (not ad-hoc Workflow scripts).
 
 ## Required control loop
 
@@ -22,7 +22,8 @@ python3 "<skill-root>/scripts/partition_write_tasks.py" <<'JSON'
 JSON
 ```
 
-Spawn only one partition batch at a time (exclusive locks). Empty `write_files` ⇒ serial alone.
+Spawn only one partition batch at a time. Empty `write_files` ⇒ serial alone.  
+In-repo absolute paths are stripped when possible; outside-repo abs still rejected.
 
 **After every write batch and before final clean report (non-optional):**
 
@@ -38,13 +39,20 @@ python3 "<skill-root>/scripts/accept_with_audit.py" <<JSON
 JSON
 ```
 
-- Skip partition / skip audit / missing `base` ⇒ `accepted=false` (fail closed)
-- Scheduler-looking success without disk audit is **not** clean
-- Out-of-grant ⇒ stop batch, do not unlock dependents as success
+Parent final report **must** include:
 
-**Gates:** unique ids · path reject · empty-write serial · casefold locks · reads read-only · digest ⊆ grant · deps `done|noop` only · incomplete/blocked/partial fail accept
+```text
+scheduler_accepted: true|false
+accept_gate: ok|fail|skipped
+clean: true only if both true/ok
+```
+
+Skip partition / skip audit / missing `base` ⇒ `clean=false`.
+
+**Gates:** unique ids · path reject/strip · empty-write serial · casefold locks · reads read-only · digest ⊆ grant · deps `done|noop` only · incomplete/blocked/partial fail accept
 
 **Load when needed:** `references/agent-prefix.md`, `references/summary-schema.md`, `references/orchestrator-contract.md`  
 **Helpers:** `scripts/partition_write_tasks.py`, `scripts/audit_write_grant.py`, `scripts/accept_with_audit.py`
 
-**Out:** accepted · files · short bullets · risks · next step. Poll ~3m; interrupt then reassign.
+**Out:** accepted · files · short bullets · risks · next step. Poll ~3m; interrupt then reassign.  
+Verify: no GNU `timeout` on macOS. READ_ONLY: keep fan-out small.

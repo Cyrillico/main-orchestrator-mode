@@ -14,7 +14,7 @@ Skip trivial single-file edits.
 classify → plan → read → locked writes → verify → synthesize → accept gate
 ```
 
-Hard gates include unique task ids, path reject, empty-write serial, case-insensitive locks, read-only readers, digest ⊆ grant, success-only deps, incomplete write/verify fail-closed.
+Hard gates include unique task ids, path normalize (in-repo abs strip / outside-repo reject), empty-write serial, case-insensitive locks, read-only readers, digest ⊆ grant, success-only deps, incomplete write/verify fail-closed.
 
 **Application-safety defaults:** partition write batches, capture pre-write `base`, and run `scripts/accept_with_audit.py` before reporting clean. Git audit mode requires `base`.
 
@@ -25,7 +25,7 @@ Prefer a pinned tag. Full steps: [`INSTALL.md`](./INSTALL.md).
 ### Ask an agent
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.10/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.11/INSTALL.md
 ```
 
 ### Claude Code
@@ -75,7 +75,7 @@ JSON
 
 `/orch <goal>`. Parent report: accepted, files, short bullets, risks, next step.
 
-Clean report requires the accept gate when writes may have landed.
+Clean report requires the accept gate when writes may have landed (`scheduler_accepted` + `accept_gate` + `clean`). Claude must use only the skill workflow script.
 
 ## What's inside
 

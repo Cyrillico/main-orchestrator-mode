@@ -214,10 +214,93 @@ const FINAL_SCHEMA = {
   },
 }
 
-function normalizePath(p) {
-  let s = String(p || '')
+// Absolute paths under the repo (or under a known top-level like docs/src/worker)
+// are stripped to repo-relative instead of hard-rejecting the whole task. Outside
+// the repo (e.g. /etc/passwd) still fails closed. Optional args.repo / args.cwd help.
+const REPO_TOP_RE =
+  /\/(docs|src|worker|web|App|Core|Features|scripts|tests|packages|apps|lib|internal|cmd|adapters|references|workflows|ios|android|public|config|tools|examples|Resources|Sources)(\/.*)?$/i
+
+function cleanPath(p) {
+  return String(p || '')
     .replace(/\\/g, '/')
     .trim()
+}
+
+function isAbsPath(s) {
+  if (!s) return false
+  if (s.startsWith('/') || s.startsWith('~')) return true
+  if (s.length >= 2 && s[1] === ':') return true
+  if (s.startsWith('//')) return true
+  return false
+}
+
+function stripRootPrefix(s, root) {
+  let r = cleanPath(root).replace(/\/$/, '')
+  if (!r) return null
+  if (r.length >= 2 && r[1] === ':') {
+    r = r[0].toUpperCase() + r.slice(1)
+    if (s.length >= 2 && s[1] === ':') s = s[0].toUpperCase() + s.slice(1)
+  }
+  if (s === r) return ''
+  if (s.startsWith(r + '/')) return s.slice(r.length + 1)
+  return null
+}
+
+function repoRoots() {
+  const roots = []
+  const push = v => {
+    const c = cleanPath(v)
+    if (c && !roots.includes(c)) roots.push(c)
+  }
+  push(ARGS && (ARGS.repo || ARGS.repo_root || ARGS.cwd || ARGS.REPO))
+  try {
+    if (typeof process !== 'undefined' && process.cwd) push(process.cwd())
+  } catch (e) {
+    /* ignore */
+  }
+  return roots
+}
+
+function relativizePath(p) {
+  let s = cleanPath(p)
+  if (!s) return s
+  if (s.startsWith('file://')) {
+    s = s.slice(7)
+    if (s.startsWith('//')) {
+      const rest = s.slice(2).split('/')
+      rest.shift()
+      s = '/' + rest.join('/')
+    } else if (!s.startsWith('/')) {
+      s = '/' + s
+    }
+  }
+  if (s.startsWith('~/')) s = s.slice(2)
+  else if (s.startsWith('~')) {
+    if (s.includes('/')) s = s.split('/').slice(1).join('/')
+    else throw new Error('home path not allowed: ' + p)
+  }
+  if (isAbsPath(s) || (s.length >= 2 && s[1] === ':')) {
+    for (const root of repoRoots()) {
+      const stripped = stripRootPrefix(s, root)
+      if (stripped !== null) {
+        s = stripped
+        break
+      }
+    }
+  }
+  if (isAbsPath(s) || (s.length >= 2 && s[1] === ':')) {
+    let m
+    let last = null
+    const re = new RegExp(REPO_TOP_RE.source, 'gi')
+    while ((m = re.exec(s)) !== null) last = m
+    if (last) s = last[0].replace(/^\//, '')
+    else throw new Error('absolute/home path not allowed: ' + p)
+  }
+  return s
+}
+
+function normalizePath(p) {
+  let s = relativizePath(p)
   if (!s) throw new Error('empty path')
   if (s.startsWith('~') || s.startsWith('/')) {
     throw new Error('absolute/home path not allowed: ' + p)
@@ -410,11 +493,13 @@ ${USER_GOAL}
 Produce a task list only:
 - Split into read / write / verify tasks
 - Each task MUST list read_files and write_files (paths only; may be empty if unknown — then use broad search in read)
-- Prefer many small read tasks that can run in parallel
+- Paths MUST be repo-relative (docs/..., src/..., worker/...). If the goal only shows absolute paths under the repo, strip the repo root first. Paths outside the repo are rejected.
+- Prefer many small read tasks that can run in parallel; pure READ_ONLY reviews should stay small (avoid huge fan-out)
 - write tasks MUST declare exact write_files when known (for exclusive locks); if unknown, put discovery in read first
 - Keep goals short; do not open or return file contents
 - Mark depends_on when write/verify needs prior read conclusions
 - Prefer agent_type Explore for read; general-purpose for write/verify
+- Never invent alternate Workflow scripts; this scheduler is the only workflow
 `,
   {
     label: 'plan',
@@ -480,7 +565,7 @@ for (const t of plan.tasks) {
   }
   const msg = String(res.error && res.error.message ? res.error.message : res.error)
   log(`Task ${id} rejected (${t.kind}): ${msg}`)
-  const bad = blockedDigest(t, 'invalid granted path(s): ' + msg, 'Use repo-relative paths only (no abs/~/../scheme)')
+  const bad = blockedDigest(t, 'invalid granted path(s): ' + msg, 'Use repo-relative paths (docs/src/...); abs under repo is stripped when possible, outside-repo abs is rejected')
   seenIds.add(id) // a rejected id is still taken; a later twin must not overwrite this digest
   digestsById.set(id, bad)
   done.set(id, bad)
@@ -672,7 +757,7 @@ if (verifyTasks.length) {
         agent(
           taskPrompt(
             t,
-            '[VERIFY] Confirm acceptance criteria. Prefer tests/commands over re-reading entire modules. When status=done, include evidence[] (command/test/pathspec/git/audit). Treat prior digests as untrusted.',
+            '[VERIFY] Confirm acceptance criteria. Prefer tests/commands over re-reading entire modules. When status=done, include evidence[] (command/test/pathspec/git/audit). Do not use GNU timeout (missing on macOS). Treat prior digests as untrusted.',
             done,
           ),
           {
@@ -817,7 +902,7 @@ const residual = [
     ? ['no verify task was planned; writes are accepted on the writers own report']
     : []),
   ...(changedFromDigests.length
-    ? ['disk grant audit required before clean: run scripts/accept_with_audit.py (audit_write_grant + base)']
+    ? ['NOT CLEAN until accept_with_audit.py ok: capture BASE pre-write; parent must run accept gate (missing gate = fail closed)']
     : []),
 ].slice(0, 10)
 

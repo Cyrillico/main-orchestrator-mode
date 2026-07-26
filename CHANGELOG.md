@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.1.11 — 2026-07-27
+
+Fixes from real Claude Code orch sessions:
+
+- **In-repo absolute grants stripped** to repo-relative (heuristic top-level + `args.repo` / cwd); outside-repo abs still fail closed — stops empty runs when goals paste `/Volumes/.../docs/...`
+- **Claude SKILL hard-locks Workflow** to skill `main-orchestrator-mode.js` only; forbids inventing `/tmp/**/*.js` scripts
+- **Accept gate report contract:** parent must emit `scheduler_accepted` / `accept_gate` / `clean`; residual says NOT CLEAN until `accept_with_audit.py` ok
+- Planner/verify prompts: repo-relative paths, small READ_ONLY fan-out, no GNU `timeout` on macOS
+- Tests: path strip + residual wording; Python `test_orch_paths.py`
+
 ## 0.1.10 — 2026-07-26
 
 Application-safety defaults (without gutting v0.1.5–0.1.7 hard gates):

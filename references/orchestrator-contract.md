@@ -16,9 +16,11 @@ Trivial **single-file** edits: do **not** invoke orch; edit directly.
 ## Plan integrity
 
 - Task **ids unique** before spawn
-- Path-normalize **all** grants (`read_files` + `write_files` on every kind); reject abs/`~`/`..`/schemes
+- Path-normalize **all** grants (`read_files` + `write_files` on every kind)
+- In-repo absolute/`~` grants are **stripped** to repo-relative when possible (`args.repo` / cwd / known top-level like `docs/`); outside-repo abs and `..` / schemes still rejected
 - Reads: read-only agent; drop any planner `write_files`
 - Reported digest `write_files` must be ⊆ granted
+- Claude: Workflow `scriptPath` must be the skill `main-orchestrator-mode.js` only — never ad-hoc `/tmp` scripts
 
 ## File lock
 
@@ -35,6 +37,7 @@ Trivial **single-file** edits: do **not** invoke orch; edit directly.
 3. Git audit mode **requires** `base` or fail closed
 4. Report clean **only if** scheduler gates pass **and** accept gate `accepted=true`
 5. Missing partition, missing audit, or missing `base` when grants were used ⇒ not clean
+6. Parent user report must include `scheduler_accepted`, `accept_gate` (ok|fail|skipped), and `clean`
 
 Path-level digest checks (in-script) do **not** replace disk audit.
 

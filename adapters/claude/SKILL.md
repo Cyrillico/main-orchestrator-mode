@@ -10,9 +10,22 @@ argument-hint: <goal>
 
 Goal: `$ARGUMENTS` (else latest user goal; else ask once).
 
-## Workflow (preferred)
+## Workflow (only allowed script)
 
-Before writes (parent duty if Fallback, or record before invoking when you control the tree):
+`scriptPath` **MUST** resolve to this skill's workflow — nothing else:
+
+```text
+<skill-root>/workflows/main-orchestrator-mode.js
+```
+
+Typical install: `~/.claude/skills/orch/workflows/main-orchestrator-mode.js`.
+
+**MUST NOT:**
+- invent `/tmp/**/*.js` or any other Workflow script
+- paste the goal/plan into a `.js` file and pass that as `scriptPath`
+- use markdown/TypeScript as a workflow script
+
+Before writes (when you control the tree):
 
 ```bash
 BASE=$(git rev-parse HEAD)
@@ -21,23 +34,27 @@ BASE=$(git rev-parse HEAD)
 ```js
 Workflow({
   scriptPath: "<skill-root>/workflows/main-orchestrator-mode.js",
-  args: { goal: "$ARGUMENTS" }
+  args: {
+    goal: "$ARGUMENTS",
+    // optional but recommended when the goal shows absolute paths:
+    repo: "<absolute-repo-root>"
+  }
 })
 ```
 
-`<skill-root>` = this skill dir. Poll `/workflows`. Parent stays short.
+Poll `/workflows`. Parent stays short. Workflow enforces scheduler hard gates; **no FS**, **no timer watchdog**. Path-level digest audit ≠ disk grant audit.
 
-Workflow enforces scheduler hard gates in code. It has **no FS** (no `.orch/`) and **no timer watchdog**. Path-level digest audit ≠ disk grant audit.
+In-repo absolute grants are stripped to repo-relative when possible; outside-repo abs paths still fail closed.
 
 ## Accept gate (required after return)
 
-Do **not** treat the run as clean until this passes when any write may have landed:
+If any write may have landed (`final.changed_files` non-empty or any write `done`):
 
 ```bash
 python3 "<skill-root>/scripts/accept_with_audit.py" <<JSON
 {
-  "scheduler_accepted": true,
-  "granted": ["src/a.ts"],
+  "scheduler_accepted": <final.accepted>,
+  "granted": ["<union of planned write grants>"],
   "git": true,
   "repo": ".",
   "base": "$BASE"
@@ -45,12 +62,25 @@ python3 "<skill-root>/scripts/accept_with_audit.py" <<JSON
 JSON
 ```
 
-- `scheduler_accepted` = Workflow `final.accepted`
-- `granted` = union of planned write grants (or batch grants)
-- Missing `base`, skipped gate, or `accepted=false` ⇒ report **not clean**
-- Workflow residual about grant audit is a hard parent TODO, not optional
+**User-facing clean report only if** accept gate `accepted=true`.
+
+Parent final report **must** include:
+
+```text
+scheduler_accepted: true|false
+accept_gate: ok|fail|skipped
+clean: true only if both scheduler_accepted and accept_gate=ok
+```
+
+- Missing `base`, skipped gate, or gate fail ⇒ `clean=false` (fail closed)
+- Residual about accept gate is a hard parent TODO, not optional
 
 ## Fallback
 
-Same loop without Workflow: plan → ready reads (≤2) → **partition + BASE** → locked writes → audit/accept gate → verify → synthesize.  
-Details: `references/*`. Gates match contract; digests untrusted.
+Same loop without Workflow: plan → reads → **partition + BASE** → locked writes → **accept_with_audit** → verify → synthesize.  
+Still no ad-hoc Workflow scripts. Details: `references/*`.
+
+## Notes
+
+- Pure READ_ONLY reviews: keep fan-out small; skip write/accept path when no writes.
+- Verify: do not use GNU `timeout` (missing on macOS).

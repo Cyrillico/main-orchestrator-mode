@@ -17,7 +17,7 @@ const SRC =
   process.argv[2] || resolve(REPO, 'adapters/claude/workflows/main-orchestrator-mode.js')
 const src = readFileSync(SRC, 'utf8').replace('export const meta', 'const meta')
 
-function makeRunner({ plan, summaries, finalOut }) {
+function makeRunner({ plan, summaries, finalOut, args }) {
   const spawned = []
   const logs = []
   const optsByLabel = new Map()
@@ -55,7 +55,15 @@ function makeRunner({ plan, summaries, finalOut }) {
     `return (async () => {${src}})()`,
   )
   return {
-    run: () => fn(agent, parallel, log, phase, { goal: 'test goal' }, { total: null }),
+    run: () =>
+      fn(
+        agent,
+        parallel,
+        log,
+        phase,
+        { goal: 'test goal', ...(args || {}) },
+        { total: null },
+      ),
     spawned,
     logs,
     optsFor: label => optsByLabel.get(label) || {},
@@ -312,8 +320,101 @@ function check(name, cond, detail) {
   )
   check(
     'un-run grant audit surfaces as residual risk',
-    out.final.residual_risks.some(x => x.includes('audit_write_grant')),
+    out.final.residual_risks.some(
+      x => x.includes('accept_with_audit') || x.includes('NOT CLEAN'),
+    ),
     out.final.residual_risks,
+  )
+}
+
+// In-repo absolute grants are stripped (heuristic top-level) instead of killing the run.
+{
+  const r = makeRunner({
+    plan: {
+      tasks: [
+        {
+          id: 'r1',
+          kind: 'read',
+          goal: 'g',
+          read_files: [
+            '/Volumes/cc/Relocated/cyril-20260416/Noodlize/docs/plans/x.md',
+          ],
+          write_files: [],
+        },
+        {
+          id: 'w1',
+          kind: 'write',
+          goal: 'g',
+          read_files: [],
+          write_files: [
+            '/Volumes/cc/Relocated/cyril-20260416/Noodlize/src/a.ts',
+          ],
+          depends_on: ['r1'],
+        },
+      ],
+    },
+    summaries: {
+      r1: ok('r1'),
+      w1: ok('w1', ['src/a.ts']),
+    },
+    finalOut: accept({ changed_files: ['src/a.ts'] }),
+  })
+  const out = await r.run()
+  check('in-repo abs read still spawns', r.spawned.includes('read:r1'), r.spawned)
+  check('in-repo abs write still spawns', r.spawned.includes('write:w1'), r.spawned)
+  check(
+    'stripped write grant is repo-relative',
+    r.promptFor('write:w1').includes('"src/a.ts"'),
+    r.promptFor('write:w1').slice(0, 400),
+  )
+  check('in-repo abs path run can accept', out.final.accepted === true, out.final)
+}
+
+// Explicit args.repo strips even unusual layouts.
+{
+  const r = makeRunner({
+    args: { repo: '/work/myrepo' },
+    plan: {
+      tasks: [
+        {
+          id: 'w1',
+          kind: 'write',
+          goal: 'g',
+          read_files: [],
+          write_files: ['/work/myrepo/pkg/util/a.go'],
+        },
+      ],
+    },
+    summaries: { w1: ok('w1', ['pkg/util/a.go']) },
+    finalOut: accept({ changed_files: ['pkg/util/a.go'] }),
+  })
+  const out = await r.run()
+  check('args.repo strip spawns writer', r.spawned.includes('write:w1'), r.spawned)
+  check(
+    'args.repo strip grant',
+    r.promptFor('write:w1').includes('"pkg/util/a.go"'),
+    r.promptFor('write:w1').slice(0, 400),
+  )
+  check('args.repo strip accepts', out.final.accepted === true, out.final)
+}
+
+// Outside-repo absolute paths still fail closed.
+{
+  const r = makeRunner({
+    plan: {
+      tasks: [
+        { id: 'r1', kind: 'read', goal: 'g', read_files: ['/etc/shadow'], write_files: [] },
+      ],
+    },
+    summaries: {},
+    finalOut: accept(),
+  })
+  const out = await r.run()
+  check('outside-repo abs still blocked', !r.spawned.includes('read:r1'), r.spawned)
+  check(
+    'outside-repo abs blocked digest',
+    out.digests.some(d => d.id === 'r1' && d.status === 'blocked'),
+    out.digests,
   )
 }
 

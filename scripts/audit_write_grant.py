@@ -96,8 +96,9 @@ def git_changed(repo: str, base: str) -> list[str]:
 
 def audit(payload: dict[str, Any]) -> dict[str, Any]:
     errors: list[str] = []
+    repo_hint = str(payload.get("repo") or "").strip() or None
     try:
-        granted = normalize_paths(payload.get("granted") or [])
+        granted = normalize_paths(payload.get("granted") or [], repo_root=repo_hint)
     except PathError as e:
         return {
             "ok": False,
@@ -137,7 +138,7 @@ def audit(payload: dict[str, Any]) -> dict[str, Any]:
         changed_raw = []
 
     try:
-        changed = normalize_paths(changed_raw)
+        changed = normalize_paths(changed_raw, repo_root=repo_hint)
     except PathError as e:
         return {
             "ok": False,
