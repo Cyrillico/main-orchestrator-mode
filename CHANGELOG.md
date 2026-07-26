@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.1.13 — 2026-07-27
+
+Evidence severity (false high-risk from source-only inference):
+
+- Production-dependent findings (flags/env/remote/live config) must not be labeled P0/high on checkout text alone
+- Default to UNVERIFIED + minimum live check, or lower severity
+- Do not re-orch only to re-argue severity; record the gap once and stop
+- Wired into contract, agent-prefix, workflow AGENT_PREFIX, host SKILLs
+
 ## 0.1.12 — 2026-07-27
 
 Anti-loop defaults (review/re-orch thrash):

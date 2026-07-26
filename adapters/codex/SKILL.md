@@ -61,3 +61,4 @@ Skip partition/audit/missing `base` ⇒ `clean=false`, still stop and report.
 **Helpers:** `scripts/partition_write_tasks.py`, `scripts/audit_write_grant.py`, `scripts/accept_with_audit.py`
 
 **Out:** clean fields · files · short bullets · risks · next step (no nested orch). Poll ~3m; one reassign max per stall.
+- **Severity:** production-dependent claims need live evidence; source-only ⇒ `UNVERIFIED` / lower severity, not P0. Do not re-orch to re-litigate.

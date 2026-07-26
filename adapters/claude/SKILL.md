@@ -82,3 +82,4 @@ Details: `references/*`.
 
 - READ_ONLY / plan-only: small fan-out; skip accept gate when no writes; deliver once.
 - Verify: no GNU `timeout` on macOS.
+- **Severity:** if it depends on production actual values (flags/env/remote), source-only inference is not P0/high — mark `UNVERIFIED` + minimum live check (do not re-orch to re-argue).

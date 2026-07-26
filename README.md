@@ -25,7 +25,7 @@ Prefer a pinned tag. Full steps: [`INSTALL.md`](./INSTALL.md).
 ### Ask an agent
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.12/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.13/INSTALL.md
 ```
 
 ### Claude Code

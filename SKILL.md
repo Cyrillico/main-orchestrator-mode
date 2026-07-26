@@ -21,3 +21,5 @@ Parent **schedules / locks / merges / accepts**. Workers return digests. Paralle
 
 **Report:** scheduler_accepted · accept_gate · clean · files · bullets · risks · next step  
 **Watchdog:** poll ~3m; one nudge; one reassign — not a full restart.
+
+**Audit severity:** production-dependent findings without live evidence ⇒ `UNVERIFIED` (not P0/high). One pass; record the check gap and stop.
