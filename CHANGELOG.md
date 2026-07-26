@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.9 — 2026-07-26
+
+- Grill-me-style thinner SKILL triggers (~25–35 lines)
+- Details stay in `references/` + workflow/scripts (gates not removed)
+- Optional `agents/openai.yaml` (explicit invocation preference)
+
 ## 0.1.8 — 2026-07-26
 
 - Slim skill surfaces on top of v0.1.7 hard gates (no runtime gate removal)

@@ -1,49 +1,25 @@
 ---
 name: orch
-description: Main Orchestrator Mode for multi-file work — parallel read-only exploration, exclusive per-file writes, summary-only digests, short parent context. Use for /orch, multi-agent orchestration, or parallel explore then locked writes.
+description: Main Orchestrator Mode for multi-file work — parallel read-only explore, exclusive per-file writes, summary digests, short parent context. Use for /orch or multi-agent multi-file orchestration.
 ---
 
-# Orch — Codex
+# Orch (Codex)
 
-Parent schedules/locks/merges/accepts. Digests only. Parallel reads; exclusive per-file writes.
+Parent schedules/locks/merges/accepts. Digests only. Parallel reads; exclusive writes.
 
-Layout: `SKILL.md` · `references/` · `scripts/{partition_write_tasks,orch_paths,audit_write_grant}.py`
+**Loop:** `plan → read (≤2) → write batches → verify → synthesize`  
+Prefer digests in `.orch/<run-id>/`. Use Codex multi-agent tools.
 
-## Loop
-
-`classify → plan → read (≤2 waves) → write batches → verify → synthesize`  
-Use Codex multi-agent tools. Prefer digests under `.orch/<run-id>/`.
-
-## Hard gates
-
-- Unique task ids; repo-relative paths on **all** task kinds
-- Empty `write_files` serial alone; case-insensitive locks
-- Reads never get write grants; digests untrusted; reported writes ⊆ granted
-- Deps unlock only `done`/`noop`
-- Incomplete writes/verifies or `blocked`/`partial` ⇒ `accepted=false`
-- After **each** write batch, audit (git mode needs pre-batch `base`):
+**Gates:** unique ids · path reject · empty-write serial · casefold locks · reads read-only · digest ⊆ grant · deps `done|noop` only · incomplete/blocked/partial fail accept · after each write batch audit with `base`:
 
 ```bash
 BASE=$(git rev-parse HEAD)
-# ... writers ...
 python3 scripts/audit_write_grant.py <<JSON
 {"granted":["src/a.ts"],"git":true,"repo":".","base":"$BASE"}
 JSON
 ```
 
-Exit `1` out-of-grant ⇒ block. Without `base`, committed edits can look clean.
+**Load when needed:** `references/agent-prefix.md`, `references/summary-schema.md`, `references/orchestrator-contract.md`  
+**Helpers:** `scripts/partition_write_tasks.py`
 
-Partition:
-
-```bash
-python3 scripts/partition_write_tasks.py <<'JSON'
-[{"id":"w1","write_files":["a.ts"]},{"id":"w2","write_files":["a.ts","b.ts"]}]
-JSON
-```
-
-## Workers / parent
-
-`references/agent-prefix.md` + `references/summary-schema.md`.  
-Poll ~3 min; interrupt then reassign. Final: accepted, files, bullets, risks, next step.
-
-Full contract: `references/orchestrator-contract.md`
+**Out:** accepted · files · short bullets · risks · next step. Poll ~3m; interrupt then reassign.

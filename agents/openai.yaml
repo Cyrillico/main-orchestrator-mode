@@ -1,0 +1,5 @@
+interface:
+  display_name: "Orch"
+  short_description: "Multi-file orchestrator"
+policy:
+  allow_implicit_invocation: false

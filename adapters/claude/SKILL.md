@@ -1,25 +1,14 @@
 ---
 name: orch
-description: Main Orchestrator Mode — parallel read-only subagents, exclusive per-file write locks, summary-only digests. Use for /orch, multi-file implementation, or main-window orchestration that must keep parent context short.
+description: Main Orchestrator Mode — parallel read-only subagents, exclusive per-file writes, summary digests. Use for /orch or multi-file main-window orchestration.
 argument-hint: <goal>
-disable-model-invocation: false
 ---
 
-# Orch — Claude Code
+# Orch (Claude)
 
-Parent schedules/locks/merges/accepts. Digests only. Parallel reads; one writer per file.
+Goal: `$ARGUMENTS` (else latest user goal; else ask once).
 
-Layout: `SKILL.md` · `references/` · `workflows/main-orchestrator-mode.js` · `scripts/`
-
-## Goal
-
-```text
-$ARGUMENTS
-```
-
-Empty → latest user goal; still empty → ask once.
-
-## Preferred: Workflow
+## Workflow (preferred)
 
 ```js
 Workflow({
@@ -28,34 +17,19 @@ Workflow({
 })
 ```
 
-`<skill-root>` = directory of this `SKILL.md` (usually `~/.claude/skills/orch`).
+`<skill-root>` = this skill dir. Poll `/workflows`. Parent stays short. Report final fields only.
 
-While running: poll `/workflows`; do not load whole modules.  
-Report: `accepted`, `summary`, `changed_files`, `residual_risks`, `incomplete`.
+Workflow enforces the hard gates in code. It has **no FS** (no `.orch/`) and **no timer watchdog**.
 
-### What the workflow enforces
-
-Unique ids · path reject on all grants · empty-serial · casefold locks · read-only read agents · digest `write_files` ⊆ granted · success-only deps · incomplete write/verify hard-fail · blocked digests for deadlock/starvation.
-
-### What it does **not** do
-
-- No timer watchdog (parent polls)
-- No filesystem / no `.orch/` writes (digests only in return value)
-- No disk grant audit — **parent must run** after return (or after each fallback batch):
+**After it returns**, run grant audit (git needs pre-write `base`):
 
 ```bash
-BASE=$(git rev-parse HEAD)   # record before writes when possible
 python3 "<skill-root>/scripts/audit_write_grant.py" <<JSON
 {"granted":["src/a.ts"],"git":true,"repo":".","base":"$BASE"}
 JSON
 ```
 
-`base` required in git mode. Exit `1` ⇒ treat as not accepted.
+## Fallback
 
-## Fallback (no Workflow)
-
-Plan board → ready reads (≤2 waves, no ready-empty→all) → locked writes → verify with `evidence[]` → synthesize. Same hard gates. Parent may write `.orch/<run-id>/` digests.
-
-## Refs
-
-`references/{summary-schema,agent-prefix,orchestrator-contract}.md` · `workflows/main-orchestrator-mode.js`
+Same loop without Workflow: plan → ready reads (≤2) → locked writes → verify → synthesize.  
+Details: `references/*`. Gates match contract; digests untrusted.
