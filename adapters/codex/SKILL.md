@@ -62,3 +62,8 @@ Skip partition/audit/missing `base` ⇒ `clean=false`, still stop and report.
 
 **Out:** clean fields · files · short bullets · risks · next step (no nested orch). Poll ~3m; one reassign max per stall.
 - **Severity:** production-dependent claims need live evidence; source-only ⇒ `UNVERIFIED` / lower severity, not P0. Do not re-orch to re-litigate.
+
+## Scoped re-review (再审)
+
+Re-review after plan edits = **changed slice only** (sections / finding IDs / files). No full-plan or full-repo re-audit. Grant paths tightly; prior out-of-scope findings stand unless clearly invalidated. One pass then stop.
+

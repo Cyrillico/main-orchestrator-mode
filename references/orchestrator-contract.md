@@ -72,6 +72,18 @@ Source/docs inference is **not** production truth.
 - Checked-in defaults, comments, and old plans can be **wrong vs production**; prefer runtime/served evidence when the claim is about what production actually does
 - Do **not** start another orch pass only to re-argue severity; record the verification gap once and stop
 
+
+## Scoped re-review (再审)
+
+When the user asks to **re-review** a plan, remediation, or prior audit after edits:
+
+- Review **only the changed slice**: plan sections / finding IDs / files / batches that actually changed (diff vs the prior accepted baseline)
+- **Must not** re-open a full-repo or full-document re-audit “to be safe”
+- Parent grants `read_files` / goals limited to that slice; workers must stay inside the grant
+- Prior findings outside the slice stay as-is unless the change clearly invalidates them (then note only the coupling)
+- Prefer one focused verify over a second full review wave
+- Still obey anti-loop: one pass, then stop — scoped re-review is not permission to nest endless review rounds
+
 ## Anti-loop
 
 - **One pass per user turn** for a given goal: plan→…→synthesize→accept gate at most once

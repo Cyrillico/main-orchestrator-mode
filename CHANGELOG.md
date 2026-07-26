@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.14 — 2026-07-27
+
+Scoped re-review (再审):
+
+- Subagent re-review covers only the **changed** plan slice (sections / finding IDs / files), not a full re-audit
+- Parent grants and verify prompts stay inside that slice
+- Wired into contract, agent-prefix, workflow planner/verify, host SKILLs
+
 ## 0.1.13 — 2026-07-27
 
 Evidence severity (false high-risk from source-only inference):

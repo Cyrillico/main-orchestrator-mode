@@ -78,8 +78,17 @@ Missing gate ⇒ `clean=false`, still **report and stop** (do not re-orch).
 plan → reads → partition+BASE → writes → accept_with_audit once → verify → synthesize → **stop**.  
 Details: `references/*`.
 
+## Scoped re-review (再审)
+
+When the user asks subagents to re-review a plan after edits:
+
+- Review **only the changed parts** of the plan (diff vs prior baseline: sections / finding IDs / files)
+- **Do not** full re-audit the whole plan or whole repo
+- Grant `read_files` / goals to that slice only; out-of-scope findings stay unless the change clearly breaks them
+- One focused pass, then stop (still anti-loop)
+
 ## Notes
 
 - READ_ONLY / plan-only: small fan-out; skip accept gate when no writes; deliver once.
-- Verify: no GNU `timeout` on macOS.
+- Verify: no GNU `timeout` on macOS; verify the changed/granted slice only.
 - **Severity:** if it depends on production actual values (flags/env/remote), source-only inference is not P0/high — mark `UNVERIFIED` + minimum live check (do not re-orch to re-argue).

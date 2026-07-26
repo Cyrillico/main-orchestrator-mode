@@ -11,6 +11,8 @@ Parent **schedules / locks / merges / accepts**. Workers return digests. Paralle
 
 **Loop (single pass):** `plan → read (≤2) → locked writes (≤20) → verify → synthesize → accept gate once → STOP`
 
+**Scoped re-review (再审):** only the changed plan slice / paths / finding IDs — never full re-audit.
+
 **Anti-loop:** do not re-orch / re-plan / nest review-of-review for the same goal because residuals remain. `clean=false` ⇒ report + named residual only (usually run accept gate once). New pass only on a **new user ask**.
 
 **Gates:** unique ids · in-repo abs strip · empty writes serial · casefold locks · reads never write · digest ⊆ grant · deps `done|noop` only · incomplete/blocked/partial ⇒ not accepted
