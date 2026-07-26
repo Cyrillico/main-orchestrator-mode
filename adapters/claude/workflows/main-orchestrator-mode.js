@@ -251,10 +251,16 @@ function lockKey(p) {
 // task's write_files are handed to workers as "granted" too, and the plan derives
 // from an untrusted goal.
 function normalizeTaskPaths(task) {
+  // A read task's write_files is dropped, not just validated: printing a write grant
+  // next to "[READ-ONLY] no mutations" is a contradictory prompt, and a read worker's
+  // edits never reach changed_files (only planned writes do), so they would land
+  // invisibly. Reads get an empty grant.
+  const writes =
+    task.kind === 'read' ? [] : (task.write_files || []).map(normalizePath)
   return {
     ...task,
     read_files: (task.read_files || []).map(normalizePath),
-    write_files: (task.write_files || []).map(normalizePath),
+    write_files: writes,
   }
 }
 
@@ -277,6 +283,40 @@ function blockedDigest(t, reason, suggestion) {
     risks: [],
     blockers: [reason.slice(0, 160)],
     next_suggestion: suggestion,
+  }
+}
+
+// The up-front guard normalizes what the PLANNER asked for; nothing re-checked what a
+// WORKER reports back. A digest claiming write_files ["src/a.ts","/etc/passwd"] was
+// accepted verbatim and flowed into changed_files. Pure path comparison needs no shell,
+// so the scheduler can enforce changed ⊆ granted for self-reported paths; the disk-level
+// check still needs scripts/audit_write_grant.py.
+function auditReportedWrites(t, summary) {
+  if (!summary) return summary
+  const granted = new Set((t.write_files || []).map(lockKey))
+  const offenders = []
+  for (const raw of summary.write_files || []) {
+    let key
+    try {
+      key = lockKey(raw)
+    } catch (e) {
+      offenders.push(String(raw))
+      continue
+    }
+    if (!granted.has(key)) offenders.push(String(raw))
+  }
+  if (!offenders.length) return summary
+  const list = offenders.slice(0, 5).join(', ')
+  log(`Task ${t.id}: reported writes outside grant: ${list}`)
+  return {
+    ...summary,
+    status: 'blocked',
+    blockers: [
+      `reported writes outside grant: ${list}`.slice(0, 160),
+      ...(summary.blockers || []),
+    ].slice(0, 5),
+    next_suggestion:
+      'Run scripts/audit_write_grant.py against a pre-batch base and revert out-of-grant edits',
   }
 }
 
@@ -404,19 +444,47 @@ const finishedIds = new Set() // any terminal summary including blocked/partial
 const digestsById = new Map()
 
 // ---------- PATH GUARD (all kinds, before any worker sees a granted path) ----------
+// Also an id-uniqueness guard: every registry below (done/successIds/digestsById) is
+// keyed by task id, so two tasks sharing an id ran in the same batch, overwrote each
+// other's digest, and the run reported accepted=true while one task's write_files
+// never reached changed_files. Keep the first, reject the rest.
 const allTasks = []
+const seenIds = new Set()
 for (const t of plan.tasks) {
+  const id = String((t && t.id) || '')
+  if (!id) {
+    log('Task rejected: missing id')
+    continue
+  }
+  if (seenIds.has(id)) {
+    const key = `${id}#dup${digestsById.size}`
+    log(`Task ${id} rejected: duplicate id`)
+    const dup = blockedDigest(
+      t,
+      `duplicate task id "${id}"; only the first task with this id runs`,
+      'Give every planned task a unique id',
+    )
+    digestsById.set(key, dup)
+    finishedIds.add(key)
+    continue
+  }
+
   const res = tryNormalizeTask(t)
   if (res.ok) {
+    if (t.kind === 'read' && (t.write_files || []).length) {
+      log(`Task ${id}: write grant dropped (read tasks are read-only)`)
+    }
+    seenIds.add(id)
     allTasks.push(res.task)
     continue
   }
   const msg = String(res.error && res.error.message ? res.error.message : res.error)
-  log(`Task ${t.id} rejected (${t.kind}): ${msg}`)
+  log(`Task ${id} rejected (${t.kind}): ${msg}`)
   const bad = blockedDigest(t, 'invalid granted path(s): ' + msg, 'Use repo-relative paths only (no abs/~/../scheme)')
-  digestsById.set(t.id, bad)
-  done.set(t.id, bad)
-  finishedIds.add(t.id)
+  seenIds.add(id) // a rejected id is still taken; a later twin must not overwrite this digest
+  digestsById.set(id, bad)
+  done.set(id, bad)
+  finishedIds.add(id)
 }
 
 if (!allTasks.length) {
@@ -460,9 +528,12 @@ if (readTasks.length) {
           label: `read:${t.id}`,
           phase: 'Read',
           schema: SUMMARY_SCHEMA,
-          agentType: t.agent_type === 'claude' ? 'claude' : 'Explore',
+          // Reads are pinned to the read-only agent. Honouring agent_type here handed a
+          // "[READ-ONLY]" task the full-tool catch-all agent, so the only thing standing
+          // between a read worker and an edit was prompt compliance.
+          agentType: 'Explore',
           effort: 'low',
-        }).then(s => ({ id: t.id, summary: s })),
+        }).then(s => ({ id: t.id, summary: auditReportedWrites(t, s) })),
       ),
     )
     for (const r of readResults.filter(Boolean)) {
@@ -474,8 +545,18 @@ if (readTasks.length) {
     }
     readPool = readPool.filter(t => !finishedIds.has(t.id))
   }
-  if (readPool.length) {
-    log('Read unready after final wave: ' + readPool.map(t => t.id).join(','))
+  // A never-ready read used to leave no digest at all: the run reported an id in a log
+  // line the parent is told not to read, with no per-task reason.
+  for (const t of readPool) {
+    log(`Read unready after final wave: ${t.id}`)
+    const bad = blockedDigest(
+      t,
+      'never became ready: depends_on unmet after the final read wave (cycle, self-reference, or a dependency that did not succeed)',
+      'Remove the dependency cycle, or make this read depend only on earlier reads',
+    )
+    digestsById.set(t.id, bad)
+    done.set(t.id, bad)
+    finishedIds.add(t.id)
   }
   log(
     `Read done success=${[...successIds].filter(id => readTasks.some(t => t.id === id)).length}/${readTasks.length}`,
@@ -525,7 +606,7 @@ while (writePool.length && guard++ < maxWriteBatches) {
               : t.agent_type || 'general-purpose',
           effort: 'medium',
         },
-      ).then(s => ({ id: t.id, summary: s })),
+      ).then(s => ({ id: t.id, summary: auditReportedWrites(t, s) })),
     ),
   )
 
@@ -560,6 +641,26 @@ while (writePool.length && guard++ < maxWriteBatches) {
   writePool = writePool.filter(t => !finishedIds.has(t.id))
 }
 
+// Deadlock and batch-guard exhaustion both left these ids digest-less: they showed up
+// only in incomplete[] with no reason attached. Give each one a blocker the parent can
+// act on without re-reading anything.
+const guardExhausted = writePool.length > 0 && guard >= maxWriteBatches
+for (const t of writePool) {
+  const reason = guardExhausted
+    ? `write batch budget exhausted (${maxWriteBatches} batches) before this task ran`
+    : 'never became ready: depends_on unmet (cycle, self-reference, or a dependency that did not succeed)'
+  const bad = blockedDigest(
+    t,
+    reason,
+    guardExhausted
+      ? 'Split the goal into fewer write tasks, or declare exact write_files so tasks batch in parallel'
+      : 'Fix the depends_on graph; a write may not depend on a verify or on itself',
+  )
+  digestsById.set(t.id, bad)
+  done.set(t.id, bad)
+  finishedIds.add(t.id)
+}
+
 // ---------- VERIFY ----------
 phase('Verify')
 const verifyTasks = allTasks.filter(t => t.kind === 'verify')
@@ -581,7 +682,7 @@ if (verifyTasks.length) {
             agentType: t.agent_type || 'general-purpose',
             effort: 'medium',
           },
-        ).then(s => ({ id: t.id, summary: s })),
+        ).then(s => ({ id: t.id, summary: auditReportedWrites(t, s) })),
       ),
     )
     for (const r of verifyResults.filter(Boolean)) {
@@ -593,8 +694,16 @@ if (verifyTasks.length) {
     }
   }
   const skipped = verifyTasks.filter(t => !finishedIds.has(t.id))
-  if (skipped.length) {
-    log('Verify skipped (deps): ' + skipped.map(t => t.id).join(','))
+  for (const t of skipped) {
+    log(`Verify skipped (deps): ${t.id}`)
+    const bad = blockedDigest(
+      t,
+      'never ran: depends_on did not reach done/noop, so the change it checks is unverified',
+      'Fix or re-run the blocking write, then re-run this verify alone',
+    )
+    digestsById.set(t.id, bad)
+    done.set(t.id, bad)
+    finishedIds.add(t.id)
   }
 }
 
@@ -620,6 +729,10 @@ const incompleteVerifyIds = plannedVerifyIds.filter(id => {
   return !successIds.has(id)
 })
 const blockingDigests = digest.filter(d => hasOpenBlockers(d))
+// The verify gates only fire on planned verifies, so a plan with writes and zero verify
+// tasks accepts on the writers' own say-so. That stays allowed (the contract's "if any"),
+// but it is reported instead of silent.
+const unverifiedWrites = plannedWriteIds.length > 0 && plannedVerifyIds.length === 0
 const missingVerifyEvidence = plannedVerifyIds.filter(id => {
   const s = digestsById.get(id)
   return (
@@ -699,6 +812,12 @@ const residual = [
     : []),
   ...(missingVerifyEvidence.length
     ? [`verify done without evidence: ${missingVerifyEvidence.join(',')}`]
+    : []),
+  ...(unverifiedWrites
+    ? ['no verify task was planned; writes are accepted on the writers own report']
+    : []),
+  ...(changedFromDigests.length
+    ? ['grant audit not run in-script: run scripts/audit_write_grant.py with a pre-batch base']
     : []),
 ].slice(0, 10)
 
