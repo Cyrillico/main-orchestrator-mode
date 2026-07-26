@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.7 — 2026-07-26
+
 Runtime-risk audit of v0.1.6, run against a real install. Every item below was
 reproduced by executing the shipped script with stubbed Workflow globals before it was
 fixed; each has a regression test in `tests/workflow-scheduler.test.mjs`.
