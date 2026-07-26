@@ -23,31 +23,49 @@ Installation differs by harness. If you use more than one, install `orch` separa
 Tell your coding agent:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.2/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.3/INSTALL.md
 ```
 
 Prefer cloning and checking out a tag/SHA, then following local `INSTALL.md`. Floating `main` is convenience, not integrity.
 
 ### Claude Code
 
-From this repository root:
+From this repository root (pinned checkout preferred):
 
 ```bash
-mkdir -p ~/.claude/skills/orch/workflows ~/.claude/skills/orch/references
-cp adapters/claude/SKILL.md ~/.claude/skills/orch/SKILL.md
-cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md   ~/.claude/skills/orch/references/
-cp adapters/claude/workflows/main-orchestrator-mode.js   ~/.claude/skills/orch/workflows/
+DEST="${HOME}/.claude/skills/orch"
+BACKUP_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/orch-backups"
+mkdir -p "$BACKUP_ROOT"
+if [ -e "$DEST" ]; then
+  TS=$(date +%Y%m%dT%H%M%S%z)
+  mv "$DEST" "$BACKUP_ROOT/orch-claude-$TS"
+fi
+mkdir -p "$DEST/workflows" "$DEST/references"
+cp adapters/claude/SKILL.md "$DEST/SKILL.md"
+cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md \
+  "$DEST/references/"
+cp adapters/claude/workflows/main-orchestrator-mode.js "$DEST/workflows/"
 ```
 
 ### Codex
 
-From this repository root:
+From this repository root (pinned checkout preferred):
 
 ```bash
-mkdir -p ~/.codex/skills/orch/scripts ~/.codex/skills/orch/references
-cp adapters/codex/SKILL.md ~/.codex/skills/orch/SKILL.md
-cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md   ~/.codex/skills/orch/references/
-cp scripts/partition_write_tasks.py ~/.codex/skills/orch/scripts/
+DEST="${CODEX_HOME:-$HOME/.codex}/skills/orch"
+BACKUP_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/orch-backups"
+mkdir -p "$BACKUP_ROOT"
+if [ -e "$DEST" ]; then
+  TS=$(date +%Y%m%dT%H%M%S%z)
+  mv "$DEST" "$BACKUP_ROOT/orch-codex-$TS"
+fi
+mkdir -p "$DEST/scripts" "$DEST/references"
+cp adapters/codex/SKILL.md "$DEST/SKILL.md"
+cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md \
+  "$DEST/references/"
+cp scripts/partition_write_tasks.py scripts/orch_paths.py scripts/audit_write_grant.py \
+  "$DEST/scripts/"
+chmod +x "$DEST/scripts/"*.py || true
 ```
 
 ### Verify

@@ -19,13 +19,13 @@ Prefer a **pinned** checkout, not floating `main` content alone:
 ```bash
 git clone https://github.com/Cyrillico/main-orchestrator-mode.git
 cd main-orchestrator-mode
-git checkout v0.1.2   # or a full commit SHA
+git checkout v0.1.3   # or a full commit SHA
 ```
 
 If you must fetch `INSTALL.md` over HTTP, pin the URL to a tag or commit:
 
 ```text
-https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.2/INSTALL.md
+https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.3/INSTALL.md
 ```
 
 Do not treat unpinned `main` as an integrity guarantee.

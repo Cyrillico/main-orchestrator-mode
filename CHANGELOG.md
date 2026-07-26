@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.1.3 — 2026-07-26
+
+- Claude: incomplete verifies hard-fail accept; no read ready-empty fallback
+- Claude: path errors block only offending tasks; partial always open-blocker
+- Case-insensitive lock keys (Foo.js vs foo.js)
+- Reject scheme paths (`file://...`)
+- README install aligned with INSTALL (external backup + full scripts)
+- Codex: recommend audit_write_grant after each write batch
+
 ## 0.1.2 — 2026-07-26
 
 - Add optional worker `evidence[]` (command/test/pathspec/git/audit/note)

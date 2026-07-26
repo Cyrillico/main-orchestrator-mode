@@ -17,6 +17,8 @@ def normalize_path(p: str) -> str:
         raise PathError(f"absolute path not allowed: {p!r}")
     if s.startswith("//"):
         raise PathError(f"unc path not allowed: {p!r}")
+    if "://" in s:
+        raise PathError(f"scheme path not allowed: {p!r}")
     while s.startswith("./"):
         s = s[2:]
     parts: list[str] = []
@@ -29,6 +31,11 @@ def normalize_path(p: str) -> str:
     if not parts:
         raise PathError(f"invalid path: {p!r}")
     return "/".join(parts)
+
+
+def lock_key(p: str) -> str:
+    """Case-insensitive lock identity for APFS/Windows-safe exclusivity."""
+    return normalize_path(p).lower()
 
 
 def normalize_paths(paths) -> list[str]:

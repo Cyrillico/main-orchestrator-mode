@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from orch_paths import PathError, normalize_path  # noqa: E402
+from orch_paths import PathError, lock_key, normalize_path  # noqa: E402
 
 
 def normalize_task(t: dict[str, Any]) -> dict[str, Any]:
@@ -49,11 +49,12 @@ def partition(tasks: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
         while i < len(remaining):
             t = remaining[i]
             files = t.get("write_files") or []
-            if any(f in locked for f in files):
+            keys = [lock_key(f) for f in files]
+            if any(k in locked for k in keys):
                 i += 1
                 continue
-            for f in files:
-                locked.add(f)
+            for k in keys:
+                locked.add(k)
             batch.append(t)
             remaining.pop(i)
         if not batch and remaining:

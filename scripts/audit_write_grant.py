@@ -103,8 +103,9 @@ def audit(payload: dict[str, Any]) -> dict[str, Any]:
             "errors": [str(e)],
         }
 
-    granted_set = set(granted)
-    out_of_grant = [p for p in changed if p not in granted_set]
+    # case-insensitive membership for grant checks
+    granted_set = {p.lower() for p in granted}
+    out_of_grant = [p for p in changed if p.lower() not in granted_set]
 
     # empty grant with any change is fail-closed
     if not granted and changed:

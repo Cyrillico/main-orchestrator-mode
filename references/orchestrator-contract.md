@@ -75,6 +75,10 @@ Default caps (user can raise):
 
 Otherwise `accepted=false` with blockers + incomplete ids.
 
-Hard gate (adapters should enforce in code when possible): non-empty incomplete writes ⇒ `accepted=false` regardless of synthesizer prose.
+Hard gates (adapters should enforce in code when possible):
 
-Verify tasks that claim `done` should include `evidence[]`. Missing evidence is a residual risk; incomplete writes remain a hard fail.
+- incomplete planned writes ⇒ `accepted=false`
+- incomplete planned verifies ⇒ `accepted=false`
+- any `blocked` / `partial` digest with open issues ⇒ `accepted=false`
+
+Verify tasks that claim `done` should include `evidence[]`. Missing evidence is a residual risk (not automatic accept).
