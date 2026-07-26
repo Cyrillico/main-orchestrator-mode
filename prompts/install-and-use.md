@@ -3,7 +3,7 @@
 Pinned:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.11/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.12/INSTALL.md
 ```
 
 Local checkout:

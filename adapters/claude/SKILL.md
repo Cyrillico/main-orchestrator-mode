@@ -1,6 +1,6 @@
 ---
 name: orch
-description: Main Orchestrator Mode — parallel read-only subagents, exclusive per-file writes, summary digests. Use for /orch or multi-file main-window orchestration. Skip trivial single-file edits.
+description: Main Orchestrator Mode — parallel read-only subagents, exclusive per-file writes, summary digests. Use for /orch or multi-file main-window orchestration. Skip trivial single-file edits. One pass per user turn; do not nest re-review loops.
 argument-hint: <goal>
 ---
 
@@ -10,51 +10,54 @@ argument-hint: <goal>
 
 Goal: `$ARGUMENTS` (else latest user goal; else ask once).
 
+## Stop conditions (anti-loop)
+
+**One orch pass per user turn.** After Workflow returns (or Fallback synthesize ends):
+
+1. If writes may have landed → run `accept_with_audit.py` **once** (need pre-write `BASE`)
+2. Report `scheduler_accepted` / `accept_gate` / `clean` + short summary
+3. **STOP.** Do not start another Workflow/orch for the same goal
+
+**MUST NOT** (common dead loops):
+- Re-invoke `/orch` or Workflow because residual says accept_gate pending / digests untrusted
+- Nest “审查 → 再评审 → 再完善 → 再审查” without a **new explicit user ask**
+- Spawn review-of-review tasks on other workers’ digests
+- Treat `clean=false` as “redo the whole plan” — only fix the named residual (usually run accept gate, or one targeted reassign)
+
+Watchdog reassign = **one** replacement for a stalled worker, not a full re-plan.
+
 ## Workflow (only allowed script)
 
-`scriptPath` **MUST** resolve to this skill's workflow — nothing else:
+`scriptPath` **MUST** be this skill’s workflow only:
 
 ```text
 <skill-root>/workflows/main-orchestrator-mode.js
 ```
 
-Typical install: `~/.claude/skills/orch/workflows/main-orchestrator-mode.js`.
-
-**MUST NOT:**
-- invent `/tmp/**/*.js` or any other Workflow script
-- paste the goal/plan into a `.js` file and pass that as `scriptPath`
-- use markdown/TypeScript as a workflow script
-
-Before writes (when you control the tree):
+**MUST NOT** invent `/tmp/**/*.js` or paste the goal into a fake workflow script.
 
 ```bash
-BASE=$(git rev-parse HEAD)
+BASE=$(git rev-parse HEAD)   # when writes may happen
 ```
 
 ```js
 Workflow({
   scriptPath: "<skill-root>/workflows/main-orchestrator-mode.js",
-  args: {
-    goal: "$ARGUMENTS",
-    // optional but recommended when the goal shows absolute paths:
-    repo: "<absolute-repo-root>"
-  }
+  args: { goal: "$ARGUMENTS", repo: "<absolute-repo-root>" }
 })
 ```
 
-Poll `/workflows`. Parent stays short. Workflow enforces scheduler hard gates; **no FS**, **no timer watchdog**. Path-level digest audit ≠ disk grant audit.
+Poll `/workflows`. Parent stays short. In-repo abs paths strip; outside-repo abs fail closed.
 
-In-repo absolute grants are stripped to repo-relative when possible; outside-repo abs paths still fail closed.
+## Accept gate (after return, once)
 
-## Accept gate (required after return)
-
-If any write may have landed (`final.changed_files` non-empty or any write `done`):
+Only if writes may have landed:
 
 ```bash
 python3 "<skill-root>/scripts/accept_with_audit.py" <<JSON
 {
   "scheduler_accepted": <final.accepted>,
-  "granted": ["<union of planned write grants>"],
+  "granted": ["<union of write grants>"],
   "git": true,
   "repo": ".",
   "base": "$BASE"
@@ -62,25 +65,20 @@ python3 "<skill-root>/scripts/accept_with_audit.py" <<JSON
 JSON
 ```
 
-**User-facing clean report only if** accept gate `accepted=true`.
-
-Parent final report **must** include:
-
 ```text
 scheduler_accepted: true|false
 accept_gate: ok|fail|skipped
-clean: true only if both scheduler_accepted and accept_gate=ok
+clean: true only if both ok
 ```
 
-- Missing `base`, skipped gate, or gate fail ⇒ `clean=false` (fail closed)
-- Residual about accept gate is a hard parent TODO, not optional
+Missing gate ⇒ `clean=false`, still **report and stop** (do not re-orch).
 
 ## Fallback
 
-Same loop without Workflow: plan → reads → **partition + BASE** → locked writes → **accept_with_audit** → verify → synthesize.  
-Still no ad-hoc Workflow scripts. Details: `references/*`.
+plan → reads → partition+BASE → writes → accept_with_audit once → verify → synthesize → **stop**.  
+Details: `references/*`.
 
 ## Notes
 
-- Pure READ_ONLY reviews: keep fan-out small; skip write/accept path when no writes.
-- Verify: do not use GNU `timeout` (missing on macOS).
+- READ_ONLY / plan-only: small fan-out; skip accept gate when no writes; deliver once.
+- Verify: no GNU `timeout` on macOS.

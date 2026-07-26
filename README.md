@@ -2,7 +2,7 @@
 
 Multi-agent skill for multi-file work: short parent context, parallel reads, exclusive per-file writes, digest-only returns.
 
-Skip trivial single-file edits.
+Skip trivial single-file edits. **One pass per user turn** — no nested re-review loops.
 
 ## Quickstart
 
@@ -25,7 +25,7 @@ Prefer a pinned tag. Full steps: [`INSTALL.md`](./INSTALL.md).
 ### Ask an agent
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.11/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.12/INSTALL.md
 ```
 
 ### Claude Code

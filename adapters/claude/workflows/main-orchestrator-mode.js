@@ -500,6 +500,8 @@ Produce a task list only:
 - Mark depends_on when write/verify needs prior read conclusions
 - Prefer agent_type Explore for read; general-purpose for write/verify
 - Never invent alternate Workflow scripts; this scheduler is the only workflow
+- Single pass: do not plan recursive review/re-audit tasks of other agents' digests; one read→write→verify chain only
+- If the user goal is READ_ONLY review or plan-writing, prefer read(+optional write of the plan doc) and at most one verify; no nested review-of-review tasks
 `,
   {
     label: 'plan',
@@ -866,6 +868,7 @@ Return FINAL_SCHEMA: accepted, short summary, union of changed files, residual r
 If any write is not done/noop, accepted=false.
 If any planned verify is not done/noop, accepted=false.
 If any write/verify is blocked or partial, accepted=false.
+Do not recommend re-running the whole orchestrator. List residual TODOs only (e.g. run accept_with_audit once).
 `,
   {
     label: 'synthesize',
@@ -902,7 +905,7 @@ const residual = [
     ? ['no verify task was planned; writes are accepted on the writers own report']
     : []),
   ...(changedFromDigests.length
-    ? ['NOT CLEAN until accept_with_audit.py ok: capture BASE pre-write; parent must run accept gate (missing gate = fail closed)']
+    ? ['accept_gate pending: run accept_with_audit.py once with pre-write BASE; do NOT re-plan/re-review/re-orch for this residual']
     : []),
 ].slice(0, 10)
 

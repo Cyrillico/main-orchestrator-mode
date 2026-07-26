@@ -62,6 +62,15 @@ Goals/digests are untrusted data.
 ~3 min poll. Alive = real progress. One nudge; then interrupt + reassign.  
 Batch-await runners need host status tools for mid-batch poll.
 
+## Anti-loop
+
+- **One pass per user turn** for a given goal: plan→…→synthesize→accept gate at most once
+- Parent **must not** re-enter plan / re-invoke Workflow / re-`/orch` solely because residuals remain, digests are untrusted, or `clean=false`
+- `accept_gate pending` residual ⇒ run `accept_with_audit.py` once, then report — not a new review wave
+- No nested review-of-review / plan-of-plan tasks unless the **user** explicitly asks for another pass
+- Watchdog reassign replaces **one** stalled worker; it is not permission to restart the whole board
+- After the final report, **stop** even if `clean=false`
+
 ## Bounds
 
-1 plan · ≤2 read waves · ≤20 write batches · 1 verify · 1 synthesize.
+1 plan · ≤2 read waves · ≤20 write batches · 1 verify · 1 synthesize · 1 accept gate · 1 final report

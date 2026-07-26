@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.1.12 — 2026-07-27
+
+Anti-loop defaults (review/re-orch thrash):
+
+- **One pass per user turn** then STOP — do not re-orch or re-Workflow for the same goal because residuals remain
+- accept_gate pending residual: run accept_with_audit.py once, not a new review wave
+- Forbid nested review-of-review / plan-of-plan without a new explicit user ask
+- Watchdog reassign = one stalled worker only, not full board restart
+- Planner/synthesize wording: no recursive re-audit recommendations
+
 ## 0.1.11 — 2026-07-27
 
 Fixes from real Claude Code orch sessions:

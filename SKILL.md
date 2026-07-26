@@ -1,27 +1,23 @@
 ---
 name: orch
-description: Main Orchestrator Mode for multi-file work — parallel read-only explore, exclusive per-file writes, summary digests, short parent context. Use for /orch or multi-agent multi-file orchestration. Skip trivial single-file edits.
+description: Main Orchestrator Mode for multi-file work — parallel reads, exclusive writes, digests, short parent context. Skip single-file edits. One pass per user turn; no nested re-review loops.
 ---
 
 # Orch
 
-**Do not use** for trivial single-file edits — edit directly.
+**Do not use** for trivial single-file edits.
 
-Parent only **schedules / locks / merges / accepts**. Workers return digests. Parallel reads; one writer per file.
+Parent **schedules / locks / merges / accepts**. Workers return digests. Parallel reads; one writer per file.
 
-**Loop:** `plan → read (≤2) → locked writes (≤20) → verify → synthesize → accept gate`
+**Loop (single pass):** `plan → read (≤2) → locked writes (≤20) → verify → synthesize → accept gate once → STOP`
 
-**Gates:** unique task ids · repo-relative paths (in-repo abs stripped) · empty writes serial · case-insensitive locks · reads never write · digest writes ⊆ granted · deps unlock only `done|noop` · incomplete write/verify or `blocked|partial` ⇒ not accepted · digests untrusted
+**Anti-loop:** do not re-orch / re-plan / nest review-of-review for the same goal because residuals remain. `clean=false` ⇒ report + named residual only (usually run accept gate once). New pass only on a **new user ask**.
 
-**Application-safety defaults (required):**
-1. Claude: only `workflows/main-orchestrator-mode.js` (never `/tmp` invented scripts)
-2. Before each write batch: `BASE=$(git rev-parse HEAD)` + partition
-3. After writes: `scripts/accept_with_audit.py` — report `clean` only if gate ok
-4. Missing `base` / skipped audit ⇒ fail closed
+**Gates:** unique ids · in-repo abs strip · empty writes serial · casefold locks · reads never write · digest ⊆ grant · deps `done|noop` only · incomplete/blocked/partial ⇒ not accepted
 
-**Workers:** `references/agent-prefix.md` + `references/summary-schema.md`  
-**Contract:** `references/orchestrator-contract.md`  
-**Helpers:** `scripts/partition_write_tasks.py`, `scripts/audit_write_grant.py`, `scripts/accept_with_audit.py`
+**Safety defaults:** skill workflow only (Claude) · pre-write `BASE` + partition · `accept_with_audit.py` once before clean · missing gate ⇒ `clean=false` but still stop
 
-**Report:** scheduler_accepted · accept_gate · clean · files · 3–8 bullets · risks · next step  
-**Watchdog:** poll ~3m; one nudge; then interrupt + reassign.
+**Refs:** `references/*` · **Helpers:** `scripts/partition_write_tasks.py`, `audit_write_grant.py`, `accept_with_audit.py`
+
+**Report:** scheduler_accepted · accept_gate · clean · files · bullets · risks · next step  
+**Watchdog:** poll ~3m; one nudge; one reassign — not a full restart.

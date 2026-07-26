@@ -1,19 +1,30 @@
 ---
 name: orch
-description: Main Orchestrator Mode for multi-file work — parallel read-only explore, exclusive per-file writes, summary digests, short parent context. Use for /orch or multi-agent multi-file orchestration. Skip trivial single-file edits.
+description: Main Orchestrator Mode for multi-file work — parallel read-only explore, exclusive per-file writes, summary digests. Skip trivial single-file edits. One pass per user turn; do not nest re-review loops.
 ---
 
 # Orch (Codex)
 
 **Do not use** for trivial single-file edits — edit directly.
 
-Parent schedules/locks/merges/accepts. Digests only. Parallel reads; exclusive writes. Prefer digests in `.orch/<run-id>/`. Use Codex multi-agent tools (not ad-hoc Workflow scripts).
+Parent schedules/locks/merges/accepts. Digests only. Prefer digests in `.orch/<run-id>/`.
+
+## Stop conditions (anti-loop)
+
+**One orch pass per user turn.** After synthesize:
+
+1. Run `accept_with_audit.py` **once** if writes landed (need pre-batch `BASE`)
+2. Report `scheduler_accepted` / `accept_gate` / `clean`
+3. **STOP** — no second full orch for the same goal
+
+**MUST NOT:** re-orch because digests are untrusted or accept_gate pending; nest review→re-review without a new user ask; treat `clean=false` as full redo (only act on the named residual).  
+Watchdog: one reassign for a stalled worker, not a re-plan.
 
 ## Required control loop
 
-`plan → read (≤2) → write batches → verify → synthesize → accept gate`
+`plan → read (≤2) → write batches → verify → synthesize → accept gate once → stop`
 
-**Before every write batch (non-optional):**
+**Before each write batch:**
 
 ```bash
 BASE=$(git rev-parse HEAD)
@@ -22,10 +33,7 @@ python3 "<skill-root>/scripts/partition_write_tasks.py" <<'JSON'
 JSON
 ```
 
-Spawn only one partition batch at a time. Empty `write_files` ⇒ serial alone.  
-In-repo absolute paths are stripped when possible; outside-repo abs still rejected.
-
-**After every write batch and before final clean report (non-optional):**
+**After writes (once before final report):**
 
 ```bash
 python3 "<skill-root>/scripts/accept_with_audit.py" <<JSON
@@ -39,20 +47,17 @@ python3 "<skill-root>/scripts/accept_with_audit.py" <<JSON
 JSON
 ```
 
-Parent final report **must** include:
-
 ```text
 scheduler_accepted: true|false
 accept_gate: ok|fail|skipped
 clean: true only if both true/ok
 ```
 
-Skip partition / skip audit / missing `base` ⇒ `clean=false`.
+Skip partition/audit/missing `base` ⇒ `clean=false`, still stop and report.
 
-**Gates:** unique ids · path reject/strip · empty-write serial · casefold locks · reads read-only · digest ⊆ grant · deps `done|noop` only · incomplete/blocked/partial fail accept
+**Gates:** unique ids · path strip/reject · empty-write serial · casefold locks · reads read-only · digest ⊆ grant · deps `done|noop` · incomplete/blocked/partial fail accept
 
-**Load when needed:** `references/agent-prefix.md`, `references/summary-schema.md`, `references/orchestrator-contract.md`  
+**Load when needed:** `references/*`  
 **Helpers:** `scripts/partition_write_tasks.py`, `scripts/audit_write_grant.py`, `scripts/accept_with_audit.py`
 
-**Out:** accepted · files · short bullets · risks · next step. Poll ~3m; interrupt then reassign.  
-Verify: no GNU `timeout` on macOS. READ_ONLY: keep fan-out small.
+**Out:** clean fields · files · short bullets · risks · next step (no nested orch). Poll ~3m; one reassign max per stall.

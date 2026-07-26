@@ -321,7 +321,10 @@ function check(name, cond, detail) {
   check(
     'un-run grant audit surfaces as residual risk',
     out.final.residual_risks.some(
-      x => x.includes('accept_with_audit') || x.includes('NOT CLEAN'),
+      x =>
+        x.includes('accept_with_audit') ||
+        x.includes('accept_gate pending') ||
+        x.includes('NOT CLEAN'),
     ),
     out.final.residual_risks,
   )
