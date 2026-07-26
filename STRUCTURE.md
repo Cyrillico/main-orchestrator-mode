@@ -35,11 +35,18 @@ main-orchestrator-mode/
 │   └── codex/
 │       ├── README.md
 │       └── SKILL.md
-└── examples/
+├── examples/
+│   ├── README.md
+│   ├── sample-board.json
+│   └── sample-digest.json
+└── tests/
     ├── README.md
-    ├── sample-board.json
-    └── sample-digest.json
+    ├── workflow-scheduler.test.mjs
+    └── test_audit_write_grant.py
 ```
+
+`tests/` is repo-only and never installed to a host. Both suites take an optional
+path argument so an installed skill can be tested in place.
 
 ## Install subsets (per host)
 

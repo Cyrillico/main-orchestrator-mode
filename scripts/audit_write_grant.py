@@ -7,12 +7,19 @@ Input JSON on stdin or file arg:
   "changed": ["src/a.ts", "src/c.ts"]   # optional explicit list
 }
 
-Or ask the tool to read git porcelain from cwd / repo:
+Or ask the tool to read changes from git. `base` is REQUIRED in git mode: record
+it with `git rev-parse HEAD` before the write batch starts. Without a baseline a
+worker that commits its edits leaves a clean tree and would audit as ok.
 {
   "granted": ["src/a.ts"],
   "git": true,
-  "repo": "."
+  "repo": ".",
+  "base": "<pre-batch SHA>"
 }
+
+Git mode unions two sources so neither uncommitted nor committed edits hide:
+  - `git status --porcelain -uall`  (working tree + index + untracked)
+  - `git diff --name-only <base>..HEAD`  (commits made during the batch)
 
 Output JSON:
 {
@@ -26,7 +33,7 @@ Output JSON:
 Exit codes:
   0 = ok (no out-of-grant)
   1 = out-of-grant or empty granted with changes
-  2 = usage / path / git error
+  2 = usage / path / git error (includes git mode without `base`)
 """
 
 from __future__ import annotations
@@ -41,16 +48,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from orch_paths import PathError, normalize_path, normalize_paths  # noqa: E402
 
 
-def git_changed(repo: str) -> list[str]:
+def _git(repo: str, *args: str) -> str:
     proc = subprocess.run(
-        ["git", "-C", repo, "status", "--porcelain", "-uall"],
+        ["git", "-C", repo, *args],
         capture_output=True,
         text=True,
     )
     if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "git status failed")
+        raise RuntimeError(proc.stderr.strip() or f"git {args[0]} failed")
+    return proc.stdout
+
+
+def git_status_changed(repo: str) -> list[str]:
     changed: list[str] = []
-    for line in proc.stdout.splitlines():
+    for line in _git(repo, "status", "--porcelain", "-uall").splitlines():
         if not line or len(line) < 4:
             continue
         # XY<space>path or rename "old -> new"
@@ -60,6 +71,23 @@ def git_changed(repo: str) -> list[str]:
         path_part = path_part.strip().strip('"')
         if path_part:
             changed.append(path_part)
+    return changed
+
+
+def git_committed_changed(repo: str, base: str) -> list[str]:
+    """Paths touched by commits between base and HEAD (renames yield both sides)."""
+    out = _git(repo, "diff", "--name-only", "-z", f"{base}..HEAD")
+    return [p for p in out.split("\0") if p]
+
+
+def git_changed(repo: str, base: str) -> list[str]:
+    """Union of uncommitted and committed changes, order-stable and deduped."""
+    seen: set[str] = set()
+    changed: list[str] = []
+    for p in git_status_changed(repo) + git_committed_changed(repo, base):
+        if p not in seen:
+            seen.add(p)
+            changed.append(p)
     return changed
 
 
@@ -79,8 +107,21 @@ def audit(payload: dict[str, Any]) -> dict[str, Any]:
     changed_raw = payload.get("changed")
     if changed_raw is None and payload.get("git"):
         repo = str(payload.get("repo") or ".")
+        base = str(payload.get("base") or "").strip()
+        if not base:
+            # Fail closed: a clean tree is ambiguous (nothing written vs all committed).
+            return {
+                "ok": False,
+                "granted": granted,
+                "changed": [],
+                "out_of_grant": [],
+                "errors": [
+                    "git: base required (record `git rev-parse HEAD` before the batch); "
+                    "without it committed edits are invisible"
+                ],
+            }
         try:
-            changed_raw = git_changed(repo)
+            changed_raw = git_changed(repo, base)
         except Exception as e:  # noqa: BLE001
             return {
                 "ok": False,

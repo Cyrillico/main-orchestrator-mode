@@ -247,11 +247,14 @@ function lockKey(p) {
   return normalizePath(p).toLowerCase()
 }
 
+// Every granted path is normalized, not just write_files: read_files and a verify
+// task's write_files are handed to workers as "granted" too, and the plan derives
+// from an untrusted goal.
 function normalizeTaskPaths(task) {
-  const raw = task.write_files || []
   return {
     ...task,
-    write_files: raw.map(normalizePath),
+    read_files: (task.read_files || []).map(normalizePath),
+    write_files: (task.write_files || []).map(normalizePath),
   }
 }
 
@@ -260,6 +263,20 @@ function tryNormalizeTask(task) {
     return { ok: true, task: normalizeTaskPaths(task) }
   } catch (e) {
     return { ok: false, task, error: e }
+  }
+}
+
+function blockedDigest(t, reason, suggestion) {
+  return {
+    status: 'blocked',
+    goal: t.goal,
+    conclusion: reason.slice(0, 500),
+    read_files: t.read_files || [],
+    write_files: t.write_files || [],
+    key_changes: [],
+    risks: [],
+    blockers: [reason.slice(0, 160)],
+    next_suggestion: suggestion,
   }
 }
 
@@ -281,7 +298,7 @@ function partitionWriteTasks(tasks) {
     for (let i = 0; i < remaining.length; ) {
       const t = remaining[i]
       const files = t.write_files || []
-      const keys = files.map(f => f.toLowerCase())
+      const keys = files.map(lockKey)
       const conflict = keys.some(k => locked.has(k))
       if (!conflict) {
         keys.forEach(k => locked.add(k))
@@ -381,48 +398,84 @@ if (!plan || !plan.tasks || !plan.tasks.length) {
   }
 }
 
-const allTasks = plan.tasks
 const done = new Map()
-const doneIds = new Set()
+const successIds = new Set() // done|noop only
+const finishedIds = new Set() // any terminal summary including blocked/partial
+const digestsById = new Map()
+
+// ---------- PATH GUARD (all kinds, before any worker sees a granted path) ----------
+const allTasks = []
+for (const t of plan.tasks) {
+  const res = tryNormalizeTask(t)
+  if (res.ok) {
+    allTasks.push(res.task)
+    continue
+  }
+  const msg = String(res.error && res.error.message ? res.error.message : res.error)
+  log(`Task ${t.id} rejected (${t.kind}): ${msg}`)
+  const bad = blockedDigest(t, 'invalid granted path(s): ' + msg, 'Use repo-relative paths only (no abs/~/../scheme)')
+  digestsById.set(t.id, bad)
+  done.set(t.id, bad)
+  finishedIds.add(t.id)
+}
+
+if (!allTasks.length) {
+  return {
+    final: {
+      accepted: false,
+      summary: 'All planned tasks rejected by the path guard',
+      changed_files: [],
+      residual_risks: ['every task carried a non-repo-relative granted path'],
+      incomplete: [...finishedIds],
+    },
+    task_count: plan.tasks.length,
+    completed_ids: [],
+    digests: [...digestsById.entries()].map(([id, s]) => ({ id, ...s })),
+  }
+}
 
 // ---------- READ ----------
 // Note: mid-flight ~3min poll/nudge/reassign is a parent/host duty via workflow status tools.
 // This script awaits batch completion; it does not implement a timer-based watchdog itself.
 phase('Read')
 const readTasks = allTasks.filter(t => t.kind === 'read')
-const successIds = new Set() // done|noop only
-const finishedIds = new Set() // any terminal summary including blocked/partial
-const digestsById = new Map()
 
 if (readTasks.length) {
-  const readyRead = readyTasks(readTasks, successIds)
-  const skippedRead = readTasks.filter(t => !readyRead.some(r => r.id === t.id))
-  // only ready reads; do not fall back to all tasks when none are ready
-  if (!readyRead.length) {
-    log('Read skipped (no ready tasks): ' + skippedRead.map(t => t.id).join(','))
+  // Contract allows up to 2 read waves. One wave alone would silently drop every
+  // read whose depends_on names another read (successIds is empty in wave 1),
+  // which then deadlocks any write depending on it.
+  const maxReadWaves = 2
+  let readPool = readTasks.slice()
+  for (let wave = 1; wave <= maxReadWaves && readPool.length; wave++) {
+    const readyRead = readyTasks(readPool, successIds)
+    // only ready reads; do not fall back to all tasks when none are ready
+    if (!readyRead.length) {
+      log(`Read wave ${wave}: no ready tasks; remaining ${readPool.map(t => t.id).join(',')}`)
+      break
+    }
+    log(`Read wave ${wave}: ${readyRead.map(t => t.id).join(', ')}`)
+    const readResults = await parallel(
+      readyRead.map(t => () =>
+        agent(taskPrompt(t, '[READ-ONLY] No file mutations allowed. write_files must stay empty.', done), {
+          label: `read:${t.id}`,
+          phase: 'Read',
+          schema: SUMMARY_SCHEMA,
+          agentType: t.agent_type === 'claude' ? 'claude' : 'Explore',
+          effort: 'low',
+        }).then(s => ({ id: t.id, summary: s })),
+      ),
+    )
+    for (const r of readResults.filter(Boolean)) {
+      if (!r.summary) continue
+      digestsById.set(r.id, r.summary)
+      done.set(r.id, r.summary)
+      finishedIds.add(r.id)
+      if (isSuccessfulStatus(r.summary.status)) successIds.add(r.id)
+    }
+    readPool = readPool.filter(t => !finishedIds.has(t.id))
   }
-  const readResults = readyRead.length
-    ? await parallel(
-    readyRead.map(t => () =>
-      agent(taskPrompt(t, '[READ-ONLY] No file mutations allowed. write_files must stay empty.', done), {
-        label: `read:${t.id}`,
-        phase: 'Read',
-        schema: SUMMARY_SCHEMA,
-        agentType: t.agent_type === 'claude' ? 'claude' : 'Explore',
-        effort: 'low',
-      }).then(s => ({ id: t.id, summary: s })),
-    ),
-  )
-    : []
-  for (const r of readResults.filter(Boolean)) {
-    if (!r.summary) continue
-    digestsById.set(r.id, r.summary)
-    done.set(r.id, r.summary)
-    finishedIds.add(r.id)
-    if (isSuccessfulStatus(r.summary.status)) successIds.add(r.id)
-  }
-  if (skippedRead.length) {
-    log('Read skipped/unready: ' + skippedRead.map(t => t.id).join(','))
+  if (readPool.length) {
+    log('Read unready after final wave: ' + readPool.map(t => t.id).join(','))
   }
   log(
     `Read done success=${[...successIds].filter(id => readTasks.some(t => t.id === id)).length}/${readTasks.length}`,
@@ -434,6 +487,8 @@ phase('Write')
 let writePool = allTasks.filter(t => t.kind === 'write')
 let guard = 0
 const maxWriteBatches = 20
+const writeAttempts = new Map()
+const maxWriteAttempts = 2
 while (writePool.length && guard++ < maxWriteBatches) {
   const ready = readyTasks(writePool, successIds)
   if (!ready.length) {
@@ -444,36 +499,8 @@ while (writePool.length && guard++ < maxWriteBatches) {
     break
   }
 
-  const good = []
-  for (const t of ready) {
-    const res = tryNormalizeTask(t)
-    if (!res.ok) {
-      const msg = String(res.error && res.error.message ? res.error.message : res.error)
-      log('Write path rejected for ' + t.id + ': ' + msg)
-      const bad = {
-        status: 'blocked',
-        goal: t.goal,
-        conclusion: 'invalid write_files path(s): ' + msg,
-        read_files: t.read_files || [],
-        write_files: t.write_files || [],
-        key_changes: [],
-        risks: [],
-        blockers: [msg.slice(0, 160)],
-        next_suggestion: 'Use repo-relative paths only (no abs/..)',
-      }
-      digestsById.set(t.id, bad)
-      done.set(t.id, bad)
-      finishedIds.add(t.id)
-      continue
-    }
-    good.push(res.task)
-  }
-  writePool = writePool.filter(t => !finishedIds.has(t.id))
-  if (!good.length) {
-    continue
-  }
-
-  const batches = partitionWriteTasks(good)
+  // Paths were normalized by the up-front guard; ready tasks are already valid.
+  const batches = partitionWriteTasks(ready)
   const batch = batches[0]
   const lockList = [
     ...new Set(batch.flatMap(t => (t.write_files || []).map(String))),
@@ -509,7 +536,27 @@ while (writePool.length && guard++ < maxWriteBatches) {
     finishedIds.add(r.id)
     if (isSuccessfulStatus(r.summary.status)) successIds.add(r.id)
   }
-  // drop finished (success or blocked/partial); leave null failures for potential retry until guard
+
+  // A dead agent yields no summary (or a null slot, losing the id). Retry once, then
+  // block the task: otherwise one persistently failing worker re-spawns until the
+  // shared batch guard is exhausted, starving legitimate batches.
+  for (const t of batch) {
+    if (finishedIds.has(t.id)) continue
+    const n = (writeAttempts.get(t.id) || 0) + 1
+    writeAttempts.set(t.id, n)
+    if (n >= maxWriteAttempts) {
+      log(`Write task ${t.id} abandoned after ${n} attempts (no summary returned)`)
+      const bad = blockedDigest(
+        t,
+        `worker returned no summary after ${n} attempts`,
+        'Re-run this task alone, or split it; check the subagent for a terminal error',
+      )
+      digestsById.set(t.id, bad)
+      done.set(t.id, bad)
+      finishedIds.add(t.id)
+    }
+  }
+  // drop finished (success, blocked/partial, or abandoned)
   writePool = writePool.filter(t => !finishedIds.has(t.id))
 }
 
@@ -581,6 +628,16 @@ const missingVerifyEvidence = plannedVerifyIds.filter(id => {
     (!Array.isArray(s.evidence) || s.evidence.length === 0)
   )
 })
+// Fallback for a null/empty synthesizer: writes that succeeded still have to be
+// reported, otherwise the run looks like it changed nothing.
+const changedFromDigests = [
+  ...new Set(
+    plannedWriteIds
+      .filter(id => successIds.has(id))
+      .flatMap(id => (digestsById.get(id) || {}).write_files || []),
+  ),
+].slice(0, 50)
+
 const hardFail =
   incompleteWriteIds.length > 0 ||
   incompleteVerifyIds.length > 0 ||
@@ -651,7 +708,10 @@ return {
     summary:
       (final && final.summary) ||
       (accepted ? 'ok' : 'rejected by hard gates or synthesize failure'),
-    changed_files: (final && final.changed_files) || [],
+    changed_files:
+      (final && final.changed_files && final.changed_files.length
+        ? final.changed_files
+        : changedFromDigests),
     residual_risks: residual,
     incomplete: forcedIncomplete,
   },

@@ -82,9 +82,14 @@ If Workflow is unavailable, use the **Fallback** section below.
      changed ⊆ granted. Out-of-grant paths ⇒ treat that write as `blocked` and
      `accepted=false`. Skipping the audit is a residual risk, not a pass.
 
+     Record the baseline **before** the batch, then audit against it. `base` is
+     required in git mode: without it a worker that commits its edits leaves a clean
+     tree and would audit as ok.
+
      ```bash
-     python3 "<skill-root>/scripts/audit_write_grant.py" <<'JSON'
-     {"granted":["src/a.ts","src/b.ts"],"git":true,"repo":"."}
+     BASE=$(git rev-parse HEAD)   # before the write batch
+     python3 "<skill-root>/scripts/audit_write_grant.py" <<JSON
+     {"granted":["src/a.ts","src/b.ts"],"git":true,"repo":".","base":"$BASE"}
      JSON
      ```
 

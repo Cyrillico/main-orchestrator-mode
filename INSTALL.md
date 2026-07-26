@@ -19,13 +19,13 @@ Prefer a **pinned** checkout, not floating `main` content alone:
 ```bash
 git clone https://github.com/Cyrillico/main-orchestrator-mode.git
 cd main-orchestrator-mode
-git checkout v0.1.4   # or a full commit SHA
+git checkout v0.1.5   # or a full commit SHA
 ```
 
 If you must fetch `INSTALL.md` over HTTP, pin the URL to a tag or commit:
 
 ```text
-https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.4/INSTALL.md
+https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.5/INSTALL.md
 ```
 
 Do not treat unpinned `main` as an integrity guarantee.
@@ -133,6 +133,16 @@ chmod +x "$DEST/scripts/partition_write_tasks.py" "$DEST/scripts/audit_write_gra
 ```bash
 python3 "<skill-root>/scripts/audit_write_grant.py" <<'JSON'
 {"granted":["src/a.ts"],"changed":["src/a.ts","src/c.ts"]}
+JSON
+```
+
+- both hosts: git mode must **reject a missing `base`** (exit 2). A pre-0.1.5 script
+  answers `ok: true` here, which is the signal that the install is stale and the audit
+  is blind to committed edits.
+
+```bash
+python3 "<skill-root>/scripts/audit_write_grant.py" <<'JSON'
+{"granted":["src/a.ts"],"git":true,"repo":"."}
 JSON
 ```
 

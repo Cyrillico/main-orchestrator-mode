@@ -15,13 +15,16 @@ Host-neutral. Adapters may map roles onto host tools, but must not weaken these 
 
 - Lock unit = normalized **repo-relative** path.
 - Normalization: `\` → `/`, strip repeated leading `./`, reject absolute/`~`/`..` paths.
+- Normalization applies to **every granted path on every task kind**, not just `write_files`:
+  `read_files` and a verify task's `write_files` are handed to workers as granted too, and
+  the board derives from an untrusted goal. Reject the task before a worker sees the path.
 - A write batch runs only if batch `write_files` paths are unique within the batch.
 - **Empty / missing `write_files` on a write task: run alone (serial defensive).**
 - After batch completes, locks release; recompute ready set.
 - Enforcement layers:
   - **Hard (scheduler):** partition uniqueness + empty-serial + path reject (script/workflow).
   - **Soft (prompt):** worker must only touch granted paths (host may not sandbox this).
-  - **Audit helper:** `<skill-root>/scripts/audit_write_grant.py` checks changed ⊆ granted after a batch. Both adapters install it; an install that omits it has no audit layer.
+  - **Audit helper:** `<skill-root>/scripts/audit_write_grant.py` checks changed ⊆ granted after a batch. Both adapters install it; an install that omits it has no audit layer. Git mode requires `base` (pre-batch `git rev-parse HEAD`) — auditing a clean tree without a baseline cannot distinguish "nothing written" from "everything committed", so it fails closed.
   - Locks are not OS flock; treat prompt compliance as required discipline.
 
 ## Dependency
@@ -60,8 +63,10 @@ Note: some workflow runners only await batch completion and do **not** implement
 Default caps (user can raise):
 
 - 1 plan
-- ≤2 read waves
-- ≤20 write batches
+- ≤2 read waves — a single wave silently drops any read whose `depends_on` names
+  another read, which then deadlocks the writes waiting on it
+- ≤20 write batches, ≤2 attempts per write task (a worker that returns no summary is
+  retried once, then blocked, so it cannot drain the shared batch budget)
 - 1 verify wave
 - 1 synthesize
 

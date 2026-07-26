@@ -50,7 +50,7 @@ For trivial single-file edits, skip this skill and edit directly.
 3. **Concurrency**
    - Read tasks: parallel OK.
    - Write tasks: exclusive per file. Use `scripts/partition_write_tasks.py` (empty `write_files` ⇒ serial alone; reject abs/`..` paths).
-   - After each write batch, run `scripts/audit_write_grant.py` (or git mode) so changed ⊆ granted; treat out-of-grant as blocked.
+   - After each write batch, run `scripts/audit_write_grant.py` so changed ⊆ granted; treat out-of-grant as blocked. In git mode pass `base` (the `git rev-parse HEAD` taken before the batch) — without it a worker that commits its edits audits as clean.
    - Different files may write in parallel.
 4. **One role per agent lifetime**
    - Do not reuse a writer as its sole verifier for the same change when independent check is available.
