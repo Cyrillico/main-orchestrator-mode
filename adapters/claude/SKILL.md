@@ -16,6 +16,8 @@ Installed layout expected:
   SKILL.md
   references/
   workflows/main-orchestrator-mode.js
+  scripts/audit_write_grant.py
+  scripts/orch_paths.py
 ```
 
 `<skill-root>` is usually `~/.claude/skills/orch`. Resolve paths from this skill directory; never hardcode a personal `/Users/<name>/...` path.
@@ -75,6 +77,18 @@ If Workflow is unavailable, use the **Fallback** section below.
    - `kind=read`: parallel OK.
    - `kind=write`: exclusive per file; empty `write_files` run alone; paths repo-relative only (no abs/`..`).
    - Different files may write in parallel.
+   - **Grant audit:** the workflow script cannot shell out, so after it returns (or after each
+     fallback write batch) run `<skill-root>/scripts/audit_write_grant.py` to check
+     changed ⊆ granted. Out-of-grant paths ⇒ treat that write as `blocked` and
+     `accepted=false`. Skipping the audit is a residual risk, not a pass.
+
+     ```bash
+     python3 "<skill-root>/scripts/audit_write_grant.py" <<'JSON'
+     {"granted":["src/a.ts","src/b.ts"],"git":true,"repo":"."}
+     JSON
+     ```
+
+     Exit `0` = clean, `1` = out-of-grant (or empty grant with changes), `2` = usage/git error.
 4. **Success**
    - Parent context stays short.
    - Prefer digests on disk (`.orch/<run-id>/`) over re-injecting worker transcripts.

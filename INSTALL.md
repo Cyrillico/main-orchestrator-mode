@@ -19,13 +19,13 @@ Prefer a **pinned** checkout, not floating `main` content alone:
 ```bash
 git clone https://github.com/Cyrillico/main-orchestrator-mode.git
 cd main-orchestrator-mode
-git checkout v0.1.3   # or a full commit SHA
+git checkout v0.1.4   # or a full commit SHA
 ```
 
 If you must fetch `INSTALL.md` over HTTP, pin the URL to a tag or commit:
 
 ```text
-https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.3/INSTALL.md
+https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.4/INSTALL.md
 ```
 
 Do not treat unpinned `main` as an integrity guarantee.
@@ -45,7 +45,7 @@ Print the resolved realpath of each destination before writing.
 
 1. Create destination skill dir.
 2. If destination exists, **backup outside the skills tree** first.
-3. Copy host adapter + shared references (+ workflow or partition script).
+3. Copy host adapter + shared references + host scripts (`workflows/` and/or `scripts/`).
 4. Keep skill-local paths only.
 5. Verify install and report.
 
@@ -92,11 +92,18 @@ if [ -e "$DEST" ]; then
   mv "$DEST" "$BACKUP_ROOT/orch-claude-$TS"
   test -d "$BACKUP_ROOT/orch-claude-$TS"
 fi
-mkdir -p "$DEST/workflows" "$DEST/references"
+mkdir -p "$DEST/workflows" "$DEST/references" "$DEST/scripts"
 cp adapters/claude/SKILL.md "$DEST/SKILL.md"
 cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md "$DEST/references/"
 cp adapters/claude/workflows/main-orchestrator-mode.js "$DEST/workflows/"
+cp scripts/audit_write_grant.py scripts/orch_paths.py "$DEST/scripts/"
+chmod +x "$DEST/scripts/audit_write_grant.py" || true
 ```
+
+`scripts/` is required: `references/orchestrator-contract.md` names
+`scripts/audit_write_grant.py` as the write-grant audit layer, so a Claude install
+without it leaves that reference dangling. The Claude scheduler partitions write
+batches in the workflow script, so `partition_write_tasks.py` is Codex-only.
 
 ### Codex
 
@@ -121,6 +128,14 @@ chmod +x "$DEST/scripts/partition_write_tasks.py" "$DEST/scripts/audit_write_gra
 - required files exist
 - no personal absolute paths in installed skill files
 - no `orch.bak-*` directories remain under skills roots
+- both hosts: audit smoke test (exit 1, `out_of_grant: ["src/c.ts"]`)
+
+```bash
+python3 "<skill-root>/scripts/audit_write_grant.py" <<'JSON'
+{"granted":["src/a.ts"],"changed":["src/a.ts","src/c.ts"]}
+JSON
+```
+
 - Codex: partition smoke test
 
 ```bash
@@ -155,6 +170,7 @@ Same as install: backup outside skills tree, overwrite, verify, report backup pa
 | Backup fails | Abort install (fail closed) |
 | `orch.bak-*` under skills/ | Move them to `~/.local/share/orch-backups/` and remove from skills discovery |
 | Partition smoke fails | Do not claim Codex success |
+| Audit smoke fails | Do not claim the write-grant audit layer is available |
 
 ## Report format
 

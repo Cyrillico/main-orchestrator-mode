@@ -21,7 +21,7 @@ Host-neutral. Adapters may map roles onto host tools, but must not weaken these 
 - Enforcement layers:
   - **Hard (scheduler):** partition uniqueness + empty-serial + path reject (script/workflow).
   - **Soft (prompt):** worker must only touch granted paths (host may not sandbox this).
-  - **Audit helper:** `scripts/audit_write_grant.py` checks changed ⊆ granted after a batch.
+  - **Audit helper:** `<skill-root>/scripts/audit_write_grant.py` checks changed ⊆ granted after a batch. Both adapters install it; an install that omits it has no audit layer.
   - Locks are not OS flock; treat prompt compliance as required discipline.
 
 ## Dependency

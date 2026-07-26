@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.4 — 2026-07-26
+
+- Claude install now ships `scripts/audit_write_grant.py` + `scripts/orch_paths.py`; the contract's audit layer was previously Codex-only, so Claude installs had a dangling reference
+- Claude adapter documents the post-workflow grant audit (workflow script cannot shell out) and that a skipped audit is a residual risk
+- INSTALL/README: host-neutral audit smoke test + failure-mode row
+- `partition_write_tasks.py` stays Codex-only (Claude partitions in the workflow script)
+
 ## 0.1.3 — 2026-07-26
 
 - Claude: incomplete verifies hard-fail accept; no read ready-empty fallback

@@ -23,7 +23,7 @@ Installation differs by harness. If you use more than one, install `orch` separa
 Tell your coding agent:
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.3/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.4/INSTALL.md
 ```
 
 Prefer cloning and checking out a tag/SHA, then following local `INSTALL.md`. Floating `main` is convenience, not integrity.
@@ -40,11 +40,13 @@ if [ -e "$DEST" ]; then
   TS=$(date +%Y%m%dT%H%M%S%z)
   mv "$DEST" "$BACKUP_ROOT/orch-claude-$TS"
 fi
-mkdir -p "$DEST/workflows" "$DEST/references"
+mkdir -p "$DEST/workflows" "$DEST/references" "$DEST/scripts"
 cp adapters/claude/SKILL.md "$DEST/SKILL.md"
 cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md \
   "$DEST/references/"
 cp adapters/claude/workflows/main-orchestrator-mode.js "$DEST/workflows/"
+cp scripts/audit_write_grant.py scripts/orch_paths.py "$DEST/scripts/"
+chmod +x "$DEST/scripts/audit_write_grant.py" || true
 ```
 
 ### Codex
