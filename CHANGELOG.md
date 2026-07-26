@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.8 — 2026-07-26
+
+- Slim skill surfaces on top of v0.1.7 hard gates (no runtime gate removal)
+- Host-neutral + Claude/Codex SKILL docs compressed; contract/schema tightened
+- README install stays complete (Claude gets scripts for post-run audit)
+
 ## 0.1.7 — 2026-07-26
 
 Runtime-risk audit of v0.1.6, run against a real install. Every item below was

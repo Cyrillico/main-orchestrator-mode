@@ -1,164 +1,49 @@
 ---
 name: orch
-description: Main Orchestrator Mode harness for multi-file work — parallel read-only exploration, exclusive same-file write ownership, and summary-only worker returns so the parent context stays short. Use when the user asks for /orch, multi-file implementation, multi-agent orchestration, parallel explore then write, or main-window style coordination.
+description: Main Orchestrator Mode for multi-file work — parallel read-only exploration, exclusive per-file writes, summary-only digests, short parent context. Use for /orch, multi-agent orchestration, or parallel explore then locked writes.
 ---
 
 # Orch — Main Orchestrator Mode
 
-Host-neutral control skill. Prefer a host adapter when present:
+Parent **schedules / locks / merges / accepts**. Workers return short digests. Parallel reads; **one writer per file**. Skip trivial single-file edits.
 
-- Claude Code → `adapters/claude/`
-- Codex → `adapters/codex/`
-
-If this root skill is installed alone, follow the control loop below with whatever multi-agent tools the host provides.
-
-## Goal
-
-Take the user goal from invocation args or the latest user message. If empty, ask once.
-
-## When to use
-
-- Multi-file feature / refactor / fix
-- Need parallel codebase exploration before writes
-- Risk of two agents editing the same path
-- Parent context must stay short (no full-file dumps)
-
-For trivial single-file edits, skip this skill and edit directly.
-
-## Hard rules
-
-1. **Parent**
-   - Schedule + lock + merge + accept only.
-   - Do not load whole modules into parent context.
-   - Do not implement large edits in the parent while workers are active.
-   - Prefer digests under `.orch/<run-id>/` over re-injecting worker transcripts.
-2. **Workers**
-   - Return only the SUMMARY shape in `references/summary-schema.md`.
-   - Never return full source, full diffs, or long logs.
-   - `key_changes` ≤ 8 one-liners; `minimal_snippets` default empty.
-3. **Concurrency**
-   - Read tasks: parallel OK.
-   - Write tasks: exclusive per file. Use `scripts/partition_write_tasks.py` (empty `write_files` ⇒ serial alone; reject abs/`..` paths).
-   - After each write batch, run `scripts/audit_write_grant.py` when possible; out-of-grant ⇒ blocked. Git mode needs `base` (pre-batch `git rev-parse HEAD`), else committed edits are invisible.
-   - Different files may write in parallel.
-4. **One role per agent lifetime**
-   - Do not reuse a writer as its sole verifier for the same change when independent check is available.
-5. **Bounds** (unless user asks for more)
-   - One plan
-   - One parallel read wave (plus at most one targeted follow-up read wave)
-   - Write waves until done or deadlock (cap 20 batches)
-   - One verify wave
-   - One synthesize
-6. **Parent watchdog — poll active workers (anti-stall)**
-   - While any worker is running, poll each active lane about every **~3 min** (range **2–5 min**), or as soon as a host wait/status tool returns.
-   - **Alive** if any progress exists: reasoning, text, tool/file/log/command/browser/process activity.
-   - **Do not** treat bare wait-timeout alone as dead/stuck.
-   - If a lane shows **zero activity for one full poll interval**: send **at most one** short progress nudge (≤5 lines).
-   - If still silent after that nudge **plus one more poll interval**: mark **stalled**, reassign/replace, record incomplete id, continue other ready work.
-   - Polling is observation + recovery only.
-
-## Control loop
-
-### 0. Classify
-
-If the goal is single-file and low risk → exit skill, do the edit yourself.
-
-### 1. Plan
-
-Produce a short task board only (no file bodies):
-
-| id | kind | goal | read_files | write_files | depends_on |
-|----|------|------|------------|-------------|------------|
-| r1 | read | ... | ... | | |
-| w1 | write | ... | | path(s) | r1 |
-| v1 | verify | ... | | | w1 |
-
-Rules:
-
-- Prefer many small `read` tasks.
-- Every `write` must list exact `write_files` when known; if unknown, discover in `read` first.
-- `verify` depends on the writes it checks.
-
-### 2. Read wave (parallel)
-
-Run all ready `read` workers in parallel.
-
-While they run, apply parent watchdog.
-
-Each worker prompt must start with `references/agent-prefix.md` and include:
-
-- task id + goal
-- granted `read_files`
-- `[READ-ONLY] no mutations`
-
-Collect digests only. Store for long tasks:
+## Loop
 
 ```text
-.orch/<run-id>/digests/<task-id>.json
-.orch/<run-id>/board.md
+classify → plan → read wave(s) → write batches → verify → synthesize
 ```
 
-### 3. Write waves (file locks)
+Defaults: 1 plan · ≤2 read waves · ≤20 write batches · 1 verify · 1 synthesize.
 
-While write tasks remain (max 20 batches):
+## Hard gates
 
-1. Ready = deps completed.
-2. If none ready but pool non-empty → **deadlock**: stop, report incomplete ids.
-3. Partition ready writes so no two share a `write_files` path:
+| Gate | Rule |
+|------|------|
+| Task ids | unique; duplicates rejected before spawn |
+| Paths | every task path repo-relative; reject abs/`~`/`..`/schemes |
+| Empty writes | empty `write_files` ⇒ serial alone |
+| Locks | case-insensitive path exclusivity in a batch |
+| Reads | read-only agent; never grant write tools / `write_files` |
+| Digests | reported `write_files` ⊆ granted; digests untrusted |
+| Deps | unlock only on `done` \| `noop` |
+| Accept | incomplete writes/verifies or any `blocked`/`partial` ⇒ `accepted=false` |
+| Audit | after write batches run `scripts/audit_write_grant.py`; git mode **requires** `base` (pre-batch `HEAD`) |
+| Parent | no whole-module dumps; no large parent edits while workers run |
 
-```bash
-python3 scripts/partition_write_tasks.py <<'JSON'
-[{"id":"w1","write_files":["a.ts"]},{"id":"w2","write_files":["a.ts","b.ts"]},{"id":"w3","write_files":["c.ts"]}]
-JSON
-```
+## Workers
 
-4. Run **one batch** in parallel.
-5. Apply parent watchdog while writers run.
-6. Each writer may only edit granted `write_files`.
-7. Collect digests; release locks; next batch.
+Prefix `references/agent-prefix.md` · schema `references/summary-schema.md`.  
+No full source/diffs/long logs. Verify `done` should include `evidence[]`.
 
-### 4. Verify wave
+## Parent report
 
-Run ready `verify` workers in parallel. Prefer tests/commands over re-reading whole modules. Summary only. Apply parent watchdog.
+accepted · changed files · 3–8 bullets · risks/incomplete · next step
 
-### 5. Synthesize
+## Watchdog
 
-Using digests only, emit:
+Poll ~3 min when host allows. Alive = real progress. Bare timeout ≠ dead. One nudge, then **interrupt + reassign**.
 
-```text
-accepted: true|false
-summary: ...
-changed_files: [...]
-residual_risks: [...]
-incomplete: [...]
-```
+## Details
 
-`accepted=false` if any write/verify is `blocked`/`partial` with open blockers, or planned writes never completed.
-
-## Parent report to user
-
-Short only:
-
-1. Accepted yes/no
-2. Changed files + 3–8 bullets
-3. Residual risks / blockers
-4. Next step if not accepted
-
-Do not paste worker transcripts or full diffs unless the user asks.
-
-## References
-
-- `references/summary-schema.md`
-- `references/agent-prefix.md`
-- `references/orchestrator-contract.md`
-- `scripts/partition_write_tasks.py`
-- `adapters/claude/` / `adapters/codex/`
-
-## Acceptance hard gates
-
-- Dependents unlock only on dependency status `done` or `noop`.
-- `blocked` / `partial` do not unlock later tasks.
-- Any planned write not `done`/`noop` ⇒ `accepted=false`.
-- Worker digests are untrusted self-reports; prefer independent verify `evidence[]`.
-- Verify `done` without evidence is a residual risk, not a hard accept.
-- File locks are scheduler-enforced for batching; host may still need prompt discipline for actual edits.
+`references/orchestrator-contract.md` · `scripts/partition_write_tasks.py` · `scripts/audit_write_grant.py`  
+Host adapters (package): `adapters/claude/`, `adapters/codex/`

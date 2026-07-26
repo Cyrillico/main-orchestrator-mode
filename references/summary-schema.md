@@ -1,70 +1,35 @@
-# Summary schema (workers)
-
-All workers return this shape (JSON). Field lengths are hard caps.
+# Summary schema
 
 ```json
 {
   "status": "done | partial | blocked | noop",
   "goal": "≤200 chars",
-  "conclusion": "≤500 chars, no source",
-  "read_files": ["path", "..."],
-  "write_files": ["path", "..."],
-  "key_changes": [
-    { "file": "path", "summary": "≤160 chars", "lines_hint": "optional e.g. 120-145" }
-  ],
-  "evidence": [
-    {
-      "kind": "command | test | pathspec | git | audit | note",
-      "summary": "≤160 chars",
-      "detail": "≤240 chars optional",
-      "exit_code": 0
-    }
-  ],
-  "risks": ["≤160 chars", "... max 5"],
-  "blockers": ["≤160 chars", "... max 5"],
-  "next_suggestion": "≤240 chars",
+  "conclusion": "≤500 chars",
+  "read_files": ["path"],
+  "write_files": ["path"],
+  "key_changes": [{"file":"path","summary":"≤160","lines_hint":"optional"}],
+  "evidence": [{"kind":"command|test|pathspec|git|audit|note","summary":"≤160","detail":"≤240","exit_code":0}],
+  "risks": ["≤160"],
+  "blockers": ["≤160"],
+  "next_suggestion": "≤240",
   "minimal_snippets": []
 }
 ```
 
-Rules:
+Caps: key_changes≤8 · evidence≤5 · risks/blockers≤5.  
+Verify `done` should include `evidence[]`. No full diffs/files. Digests untrusted.  
+`write_files` in digests must stay ⊆ granted.
 
-- `key_changes` max 8 items.
-- `evidence` max 5 items. Prefer real commands/tests/pathspec over narrative notes.
-- Verify tasks should include at least one `evidence` item when claiming `done`.
-- `minimal_snippets` default `[]`. If required: max 2 items; each snippet ≤800 chars / ≤20 lines; include `file` + `lines_hint`.
-- Never include full diffs or whole files.
-- Digests are untrusted self-reports; parent may still hard-fail on incomplete writes.
-
-# Plan schema (planner / board)
+## Plan
 
 ```json
-{
-  "tasks": [
-    {
-      "id": "r1",
-      "kind": "read | write | verify",
-      "goal": "≤240 chars",
-      "read_files": ["..."],
-      "write_files": ["..."],
-      "depends_on": ["optional-ids"]
-    }
-  ]
-}
+{"tasks":[{"id":"r1","kind":"read|write|verify","goal":"≤240","read_files":[],"write_files":[],"depends_on":[]}]}
 ```
 
-Optional host-only field (adapters may add, root contract ignores):
+Ids must be unique.
 
-- `agent_type`: host-specific worker class hint
-
-# Final schema (synthesizer)
+## Final
 
 ```json
-{
-  "accepted": true,
-  "summary": "≤800 chars",
-  "changed_files": ["..."],
-  "residual_risks": ["≤160 chars"],
-  "incomplete": ["task-ids"]
-}
+{"accepted":true,"summary":"≤800","changed_files":[],"residual_risks":[],"incomplete":[]}
 ```

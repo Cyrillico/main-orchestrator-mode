@@ -1,8 +1,1 @@
-# adapters/claude
-
-Claude Code skill adapter.
-
-- `SKILL.md`
-- `workflows/main-orchestrator-mode.js`
-
-Install via repo root `INSTALL.md`.
+Claude: short `SKILL.md` + `workflows/` + `scripts/` (audit). See `INSTALL.md`.
