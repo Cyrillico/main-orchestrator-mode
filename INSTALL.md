@@ -19,13 +19,13 @@ Prefer a **pinned** checkout, not floating `main` content alone:
 ```bash
 git clone https://github.com/Cyrillico/main-orchestrator-mode.git
 cd main-orchestrator-mode
-git checkout v0.1.14   # or a full commit SHA
+git checkout v0.1.15   # or a full commit SHA
 ```
 
 If you must fetch `INSTALL.md` over HTTP, pin the URL to a tag or commit:
 
 ```text
-https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.14/INSTALL.md
+https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.15/INSTALL.md
 ```
 
 Do not treat unpinned `main` as an integrity guarantee.
@@ -95,7 +95,7 @@ fi
 mkdir -p "$DEST/workflows" "$DEST/references" "$DEST/scripts" "$DEST/agents"
 cp adapters/claude/SKILL.md "$DEST/SKILL.md"
 cp adapters/claude/agents/openai.yaml "$DEST/agents/" 2>/dev/null || true
-cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md "$DEST/references/"
+cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md references/re-review-prompt.md references/progress-ledger.md "$DEST/references/"
 cp adapters/claude/workflows/main-orchestrator-mode.js "$DEST/workflows/"
 cp scripts/partition_write_tasks.py scripts/orch_paths.py scripts/audit_write_grant.py scripts/accept_with_audit.py "$DEST/scripts/"
 chmod +x "$DEST/scripts/"*.py || true
@@ -117,7 +117,7 @@ fi
 mkdir -p "$DEST/scripts" "$DEST/references" "$DEST/agents"
 cp adapters/codex/SKILL.md "$DEST/SKILL.md"
 cp adapters/codex/agents/openai.yaml "$DEST/agents/" 2>/dev/null || true
-cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md "$DEST/references/"
+cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md references/re-review-prompt.md references/progress-ledger.md "$DEST/references/"
 cp scripts/partition_write_tasks.py scripts/orch_paths.py scripts/audit_write_grant.py scripts/accept_with_audit.py "$DEST/scripts/"
 chmod +x "$DEST/scripts/"*.py || true
 ```

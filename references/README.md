@@ -1,1 +1,1 @@
-`agent-prefix.md` · `orchestrator-contract.md` · `summary-schema.md`
+contract · schema · agent-prefix · re-review-prompt · progress-ledger

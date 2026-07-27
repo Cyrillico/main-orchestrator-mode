@@ -56,6 +56,7 @@ const AGENT_PREFIX = `
 8. VERIFY/done claims: include evidence[] (command/test/pathspec/git/audit) when possible.
 9. Severity that depends on live production config/flags/env/remote state: do NOT call P0/high from source-only inference; mark UNVERIFIED + needed live check.
 10. Re-review/re-verify: only the changed plan slice / granted paths / named IDs — never full-reaudit the whole plan or repo.
+11. Parent enforces max_fix_rounds=3 per theme and final ≤1 fix wave; never recommend re-orch when capped.
 [OUTPUT] Short structured summary only.
 `.trim()
 
@@ -506,6 +507,7 @@ Produce a task list only:
 - If the user goal is READ_ONLY review or plan-writing, prefer read(+optional write of the plan doc) and at most one verify; no nested review-of-review tasks
 - For audits: do not plan P0/high on production-dependent claims without a live-check task or an explicit UNVERIFIED residual; source-only defaults/flags are not production truth
 - If the goal is re-review/再审 after plan edits: scope tasks to the **changed** plan sections/finding IDs/files only; forbid full-document or full-repo re-audit tasks
+- Prefer at most one verify task; do not plan multi-round review/fix chains inside one plan (parent owns max_fix_rounds=3 outside)
 `,
   {
     label: 'plan',
@@ -872,7 +874,7 @@ Return FINAL_SCHEMA: accepted, short summary, union of changed files, residual r
 If any write is not done/noop, accepted=false.
 If any planned verify is not done/noop, accepted=false.
 If any write/verify is blocked or partial, accepted=false.
-Do not recommend re-running the whole orchestrator. List residual TODOs only (e.g. run accept_with_audit once).
+Do not recommend re-running the whole orchestrator or a second full review. List residual TODOs only (e.g. run accept_with_audit once). If fix rounds are exhausted, say park/BLOCKED — not another orch pass.
 `,
   {
     label: 'synthesize',
@@ -909,7 +911,7 @@ const residual = [
     ? ['no verify task was planned; writes are accepted on the writers own report']
     : []),
   ...(changedFromDigests.length
-    ? ['accept_gate pending: run accept_with_audit.py once with pre-write BASE; do NOT re-plan/re-review/re-orch for this residual']
+    ? ['accept_gate pending: run accept_with_audit.py once with BASE; residual only — do NOT open a review/fix loop or re-orch']
     : []),
 ].slice(0, 10)
 

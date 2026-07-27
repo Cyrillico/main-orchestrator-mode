@@ -89,10 +89,14 @@ When the user asks to **re-review** a plan, remediation, or prior audit after ed
 - **One pass per user turn** for a given goal: plan→…→synthesize→accept gate at most once
 - Parent **must not** re-enter plan / re-invoke Workflow / re-`/orch` solely because residuals remain, digests are untrusted, or `clean=false`
 - `accept_gate pending` residual ⇒ run `accept_with_audit.py` once, then report — not a new review wave
-- No nested review-of-review / plan-of-plan tasks unless the **user** explicitly asks for another pass
+- **max_fix_rounds = 3** per theme (theme = same finding set / same write grant set): each round = one fix dispatch + one scoped re-review (`references/re-review-prompt.md`). At 3: park with ruling or BLOCKED and **stop** — no fourth round
+- After a **full** review: at most **one** fix wave and **one** scoped re-review; **no second fix wave**
+- **Minor / UNVERIFIED / accept_gate pending** never open a review/fix loop — residual only
+- No nested review-of-review / plan-of-plan unless the **user** explicitly asks for another pass
 - Watchdog reassign replaces **one** stalled worker; it is not permission to restart the whole board
+- Optional ledger: `references/progress-ledger.md` — prevents re-dispatch after compaction
 - After the final report, **stop** even if `clean=false`
 
 ## Bounds
 
-1 plan · ≤2 read waves · ≤20 write batches · 1 verify · 1 synthesize · 1 accept gate · 1 final report
+1 plan · ≤2 read waves · ≤20 write batches · 1 verify · 1 synthesize · 1 accept gate · ≤3 fix rounds/theme · ≤1 final fix wave · 1 final report

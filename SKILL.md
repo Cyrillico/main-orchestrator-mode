@@ -1,27 +1,25 @@
 ---
 name: orch
-description: Main Orchestrator Mode for multi-file work — parallel reads, exclusive writes, digests, short parent context. Skip single-file edits. One pass per user turn; no nested re-review loops.
+description: Use when multi-file work needs parallel read-only explore, exclusive per-file writes, and short digests via /orch or multi-agent orchestration. Skip trivial single-file edits.
 ---
 
 # Orch
 
-**Do not use** for trivial single-file edits.
+Parent schedules/locks/merges/accepts. Workers return digests. One writer per file.
 
-Parent **schedules / locks / merges / accepts**. Workers return digests. Parallel reads; one writer per file.
+**When not:** trivial single-file edit → edit directly.
 
-**Loop (single pass):** `plan → read (≤2) → locked writes (≤20) → verify → synthesize → accept gate once → STOP`
+**Pass (once per user turn):** `plan → read(≤2) → writes(≤20) → verify → synthesize → accept gate once → STOP`
 
-**Scoped re-review (再审):** only the changed plan slice / paths / finding IDs — never full re-audit.
+**Hard stop (anti-loop):**
+- Same goal: do not re-orch / re-Workflow because residuals, digests untrusted, or `clean=false`
+- Per theme: **max_fix_rounds=3** (each = fix dispatch + scoped re-review); then park/BLOCKED and stop
+- After full review: **≤1 fix wave + ≤1 scoped re-review** — no second wave
+- Minor / `UNVERIFIED` / `accept_gate pending` do **not** open a new review loop
+- Re-review: changed slice only — see `references/re-review-prompt.md`
 
-**Anti-loop:** do not re-orch / re-plan / nest review-of-review for the same goal because residuals remain. `clean=false` ⇒ report + named residual only (usually run accept gate once). New pass only on a **new user ask**.
+**Claude:** only `workflows/main-orchestrator-mode.js` (never `/tmp` scripts).  
+**Safety:** pre-write `BASE`; `scripts/accept_with_audit.py` once if writes landed; report `scheduler_accepted` / `accept_gate` / `clean`.
 
-**Gates:** unique ids · in-repo abs strip · empty writes serial · casefold locks · reads never write · digest ⊆ grant · deps `done|noop` only · incomplete/blocked/partial ⇒ not accepted
-
-**Safety defaults:** skill workflow only (Claude) · pre-write `BASE` + partition · `accept_with_audit.py` once before clean · missing gate ⇒ `clean=false` but still stop
-
-**Refs:** `references/*` · **Helpers:** `scripts/partition_write_tasks.py`, `audit_write_grant.py`, `accept_with_audit.py`
-
-**Report:** scheduler_accepted · accept_gate · clean · files · bullets · risks · next step  
-**Watchdog:** poll ~3m; one nudge; one reassign — not a full restart.
-
-**Audit severity:** production-dependent findings without live evidence ⇒ `UNVERIFIED` (not P0/high). One pass; record the check gap and stop.
+**Details:** `references/orchestrator-contract.md` · helpers in `scripts/`  
+**Watchdog:** poll ~3m; one nudge; **one** reassign per stall.

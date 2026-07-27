@@ -2,7 +2,7 @@
 
 Multi-agent skill for multi-file work: short parent context, parallel reads, exclusive per-file writes, digest-only returns.
 
-Skip trivial single-file edits. **One pass per user turn** — no nested re-review loops.
+Skip trivial single-file edits. **One pass per user turn**; max_fix_rounds=3; final ≤1 fix wave — no nested re-review loops.
 
 ## Quickstart
 
@@ -25,7 +25,7 @@ Prefer a pinned tag. Full steps: [`INSTALL.md`](./INSTALL.md).
 ### Ask an agent
 
 ```text
-Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.14/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Cyrillico/main-orchestrator-mode/v0.1.15/INSTALL.md
 ```
 
 ### Claude Code
@@ -38,7 +38,7 @@ mkdir -p "$BACKUP_ROOT"
 mkdir -p "$DEST/workflows" "$DEST/references" "$DEST/scripts" "$DEST/agents"
 cp adapters/claude/SKILL.md "$DEST/SKILL.md"
 cp adapters/claude/agents/openai.yaml "$DEST/agents/" 2>/dev/null || true
-cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md "$DEST/references/"
+cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md references/re-review-prompt.md references/progress-ledger.md "$DEST/references/"
 cp adapters/claude/workflows/main-orchestrator-mode.js "$DEST/workflows/"
 cp scripts/partition_write_tasks.py scripts/orch_paths.py scripts/audit_write_grant.py scripts/accept_with_audit.py "$DEST/scripts/"
 chmod +x "$DEST/scripts/"*.py || true
@@ -54,7 +54,7 @@ mkdir -p "$BACKUP_ROOT"
 mkdir -p "$DEST/scripts" "$DEST/references" "$DEST/agents"
 cp adapters/codex/SKILL.md "$DEST/SKILL.md"
 cp adapters/codex/agents/openai.yaml "$DEST/agents/" 2>/dev/null || true
-cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md "$DEST/references/"
+cp references/agent-prefix.md references/orchestrator-contract.md references/summary-schema.md references/re-review-prompt.md references/progress-ledger.md "$DEST/references/"
 cp scripts/partition_write_tasks.py scripts/orch_paths.py scripts/audit_write_grant.py scripts/accept_with_audit.py "$DEST/scripts/"
 chmod +x "$DEST/scripts/"*.py || true
 ```

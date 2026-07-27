@@ -1,69 +1,33 @@
 ---
 name: orch
-description: Main Orchestrator Mode for multi-file work — parallel read-only explore, exclusive per-file writes, summary digests. Skip trivial single-file edits. One pass per user turn; do not nest re-review loops.
+description: Use when multi-file work needs parallel read-only explore, exclusive per-file writes, and short digests via multi-agent tools. Skip trivial single-file edits.
 ---
 
 # Orch (Codex)
 
-**Do not use** for trivial single-file edits — edit directly.
+Parent schedules only. Digests in `.orch/<run-id>/` preferred. Skip single-file edits.
 
-Parent schedules/locks/merges/accepts. Digests only. Prefer digests in `.orch/<run-id>/`.
+## One pass → STOP
 
-## Stop conditions (anti-loop)
+`plan → read(≤2) → write batches → verify → synthesize → accept gate once → STOP`
 
-**One orch pass per user turn.** After synthesize:
-
-1. Run `accept_with_audit.py` **once** if writes landed (need pre-batch `BASE`)
-2. Report `scheduler_accepted` / `accept_gate` / `clean`
-3. **STOP** — no second full orch for the same goal
-
-**MUST NOT:** re-orch because digests are untrusted or accept_gate pending; nest review→re-review without a new user ask; treat `clean=false` as full redo (only act on the named residual).  
-Watchdog: one reassign for a stalled worker, not a re-plan.
-
-## Required control loop
-
-`plan → read (≤2) → write batches → verify → synthesize → accept gate once → stop`
-
-**Before each write batch:**
-
-```bash
-BASE=$(git rev-parse HEAD)
-python3 "<skill-root>/scripts/partition_write_tasks.py" <<'JSON'
-[{"id":"w1","write_files":["src/a.ts"]},{"id":"w2","write_files":["src/b.ts"]}]
-JSON
-```
-
-**After writes (once before final report):**
-
-```bash
-python3 "<skill-root>/scripts/accept_with_audit.py" <<JSON
-{
-  "scheduler_accepted": true,
-  "granted": ["src/a.ts","src/b.ts"],
-  "git": true,
-  "repo": ".",
-  "base": "$BASE"
-}
-JSON
-```
+Before each write batch: `BASE=$(git rev-parse HEAD)` + `scripts/partition_write_tasks.py`.  
+After writes: `scripts/accept_with_audit.py` **once** (needs `base`).
 
 ```text
-scheduler_accepted: true|false
-accept_gate: ok|fail|skipped
-clean: true only if both true/ok
+scheduler_accepted / accept_gate / clean
 ```
 
-Skip partition/audit/missing `base` ⇒ `clean=false`, still stop and report.
+## Anti-loop (must)
 
-**Gates:** unique ids · path strip/reject · empty-write serial · casefold locks · reads read-only · digest ⊆ grant · deps `done|noop` · incomplete/blocked/partial fail accept
+| Rule | Limit |
+|------|--------|
+| Re-orch same goal for residuals | **forbidden** |
+| Fix+scoped re-review per theme | **≤3** then park/BLOCKED |
+| After full review | **≤1** fix wave + **≤1** re-review |
+| Minor / UNVERIFIED / accept_gate pending | residual only |
+| Watchdog reassign | **1** per stall |
+| Re-review scope | `references/re-review-prompt.md` |
 
-**Load when needed:** `references/*`  
-**Helpers:** `scripts/partition_write_tasks.py`, `scripts/audit_write_grant.py`, `scripts/accept_with_audit.py`
-
-**Out:** clean fields · files · short bullets · risks · next step (no nested orch). Poll ~3m; one reassign max per stall.
-- **Severity:** production-dependent claims need live evidence; source-only ⇒ `UNVERIFIED` / lower severity, not P0. Do not re-orch to re-litigate.
-
-## Scoped re-review (再审)
-
-Re-review after plan edits = **changed slice only** (sections / finding IDs / files). No full-plan or full-repo re-audit. Grant paths tightly; prior out-of-scope findings stand unless clearly invalidated. One pass then stop.
-
+**Helpers:** `partition_write_tasks.py`, `audit_write_grant.py`, `accept_with_audit.py`  
+**Contract:** `references/orchestrator-contract.md`

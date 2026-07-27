@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.1.15 — 2026-07-27
+
+Superpowers-inspired anti-loop + thinner triggers:
+
+- Host SKILL.md slimmed to trigger/stop surface; details stay in references
+- **max_fix_rounds=3** per theme (fix + scoped re-review), then park/BLOCKED
+- After full review: **≤1 fix wave + ≤1 scoped re-review** (no second wave)
+- Minor / UNVERIFIED / accept_gate pending never open a review loop
+- New , optional 
+- description is when-to-use oriented
+
 ## 0.1.14 — 2026-07-27
 
 Scoped re-review (再审):
